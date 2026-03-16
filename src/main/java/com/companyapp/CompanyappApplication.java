@@ -10,4 +10,6 @@ public class CompanyappApplication {
         SpringApplication.run(CompanyappApplication.class, args);
     }
 
+    // This method is used to initialize the database with some sample data when the application starts.
+
 }
