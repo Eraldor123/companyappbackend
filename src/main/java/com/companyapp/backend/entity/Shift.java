@@ -9,6 +9,7 @@ import lombok.Setter;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.UUID;
 
 @Entity
@@ -48,14 +49,14 @@ public class Shift {
      */
     @NotNull
     @Column(name = "start_time", nullable = false)
-    private LocalDateTime startTime;
+    private ZonedDateTime startTime;
 
     /**
      * Čas začátku a konce směny. Tyto atributy jsou klíčové pro plánování a zobrazení směn v kalendáři, stejně jako pro výpočet odpracovaných hodin a kontrolu překrývání směn.
      */
     @NotNull
     @Column(name = "end_time", nullable = false)
-    private LocalDateTime endTime;
+    private ZonedDateTime endTime;
 
     /**
      * Počet pracovníků, kteří jsou potřeba pro tuto směnu. Tento atribut je důležitý pro plánování a zajištění dostatečného personálu pro každou směnu.

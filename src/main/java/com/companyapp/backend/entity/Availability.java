@@ -46,7 +46,7 @@ public class Availability {
      * Pole pro uložení stavu dostupnosti uživatele pro dané datum. Tento enum umožňuje snadné kategorizování a filtrování dostupností podle jejich stavu (např. k dispozici, nedostupný, na dovolené atd.). Toto pole je povinné, protože každý záznam dostupnosti musí mít definovaný stav, který určuje, zda je uživatel k dispozici nebo ne pro dané datum.
      */
     @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", columnDefinition = "availability_status", nullable = false)
     private AvailabilityStatus status;
 

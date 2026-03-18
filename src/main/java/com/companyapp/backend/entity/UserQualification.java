@@ -44,4 +44,5 @@ public class UserQualification {
     public int hashCode() {
         return getClass().hashCode();
     }
+
 }

@@ -35,7 +35,7 @@ public class Contract {
      * Pole pro uložení typu kontraktu, který určuje, jaký druh pracovního vztahu tento kontrakt představuje (např. plný úvazek, částečný úvazek, dočasný kontrakt atd.). Tento enum umožňuje snadné kategorizování a filtrování kontraktů podle jejich typu. Toto pole je povinné, protože každý kontrakt musí mít definovaný typ.
      */
     @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "type", columnDefinition = "contract_type", nullable = false)
     private ContractType type;
 

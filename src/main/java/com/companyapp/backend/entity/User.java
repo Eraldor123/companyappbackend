@@ -1,15 +1,18 @@
 package com.companyapp.backend.entity;
 
+import com.companyapp.backend.HashUtil;
 import com.companyapp.backend.enums.AccessLevel;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import org.jspecify.annotations.Nullable;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -45,7 +48,7 @@ public class User {
      * Úroveň přístupu uživatele, která určuje jeho oprávnění a role v systému. Tento atribut je klíčový pro řízení přístupu k různým funkcím a částem aplikace. Úroveň přístupu je reprezentována výčtem (enum) AccessLevel, který může obsahovat hodnoty jako BASIC, MANAGER, ADMIN atd. Tento atribut je uložen v databázi jako řetězec (STRING) a je definován jako nenulový, aby se zajistilo, že každý uživatel má přiřazenou úroveň přístupu.
      */
     @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "role", columnDefinition = "access_level", nullable = false)
     private AccessLevel role = AccessLevel.BASIC;
 
@@ -73,5 +76,41 @@ public class User {
     @Override
     public int hashCode() {
         return getClass().hashCode();
+    }
+
+    public void setAttendanceId(@NotBlank(message = "Docházkové ID je povinné.") String attendanceId) {
+        this.pin = attendanceId;
+    }
+
+    public void setAccessLevel(@NotNull(message = "Úroveň přístupu musí být zvolena.") AccessLevel accessLevel) {
+        this.role = accessLevel;
+    }
+
+    public void setActive(boolean b) {
+        this.isActive = b;
+    }
+
+    public String getAttendanceId() {
+        return this.pin;
+    }
+
+     public AccessLevel getAccessLevel() {
+        return this.role;
+    }
+
+     public boolean isActive() {
+        return this.isActive;
+    }
+
+    public @Nullable String getPinHash() {
+        return HashUtil.hash(this.pin);
+    }
+
+    public String getLastName() {
+        return userProfile != null ? userProfile.getLastName() : null;
+    }
+
+    public String getFirstName() {
+        return userProfile != null ? userProfile.getFirstName() : null;
     }
 }

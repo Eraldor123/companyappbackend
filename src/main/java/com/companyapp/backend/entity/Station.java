@@ -56,4 +56,8 @@ public class Station {
     public int hashCode() {
         return getClass().hashCode();
     }
+
+    public void setActive(boolean b) {
+        this.isActive = b;
+    }
 }

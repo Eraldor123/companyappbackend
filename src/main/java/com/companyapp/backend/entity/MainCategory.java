@@ -49,4 +49,8 @@ public class MainCategory {
     public int hashCode() {
         return getClass().hashCode();
     }
+
+    public void setActive(boolean b) {
+        this.isActive = b;
+    }
 }

@@ -2,6 +2,8 @@ package com.companyapp.backend.repository;
 
 import com.companyapp.backend.entity.User;
 import com.companyapp.backend.enums.AccessLevel;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -24,4 +26,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Modifying
     @Query("UPDATE User u SET u.isActive = false WHERE u.id = :userId")
     void deactivateUser(@Param("userId") UUID userId);
+
+    boolean existsByEmail(@Email(message = "E-mail nemá správný formát.") @NotBlank(message = "E-mail je povinný.") String email);
+
+    boolean existsByAttendanceId(@NotBlank(message = "Docházkové ID je povinné.") String attendanceId);
+
+    <T> ScopedValue<User> findByAttendanceId(String attendanceId);
 }
