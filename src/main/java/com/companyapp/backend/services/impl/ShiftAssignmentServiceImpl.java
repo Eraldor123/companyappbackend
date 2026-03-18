@@ -1,15 +1,10 @@
 package com.companyapp.backend.services.impl;
 
 import com.companyapp.backend.services.dto.response.ShiftAssignmentDto;
-import com.companyapp.backend.entity.Shift;
-import com.companyapp.backend.entity.ShiftAssignment;
-import com.companyapp.backend.entity.User;
+import com.companyapp.backend.entity.*;
 import com.companyapp.backend.enums.AvailabilityStatus;
 import com.companyapp.backend.services.exception.*;
-import com.companyapp.backend.repository.AvailabilityRepository;
-import com.companyapp.backend.repository.ShiftAssignmentRepository;
-import com.companyapp.backend.repository.ShiftRepository;
-import com.companyapp.backend.repository.UserRepository;
+import com.companyapp.backend.repository.*;
 import com.companyapp.backend.services.QualificationService;
 import com.companyapp.backend.services.ShiftAssignmentService;
 import lombok.RequiredArgsConstructor;
@@ -35,79 +30,67 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
     public ShiftAssignmentDto assignShift(UUID shiftId, UUID userId) {
         log.info("Zahajuji proces přiřazení směny {} pro uživatele {}", shiftId, userId);
 
-        // 1. Načtení entit
         Shift shift = shiftRepository.findById(shiftId)
-                .orElseThrow(() -> new ResourceNotFoundException("Směna s ID " + shiftId + " nebyla nalezena."));
+                .orElseThrow(() -> new ResourceNotFoundException("Směna nebyla nalezena."));
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Uživatel s ID " + userId + " nebyl nalezen."));
+                .orElseThrow(() -> new ResourceNotFoundException("Uživatel nebyl nalezen."));
 
-        // 2. Kontrola kapacity a Optimistic Locking
-        // Hibernate se o @Version (OptimisticLockException) postará při samotném uložení, 
-        // zde ale bráníme byznysovému překročení kapacity.
-        long currentAssignmentsCount = shiftAssignmentRepository.countByShiftId(shiftId);
-        if (currentAssignmentsCount >= shift.getStation().getCapacityLimit()) {
-            throw new CapacityExceededException("Kapacitní limit pro stanoviště " + shift.getStation().getName() + " byl již vyčerpán.");
+        // 2. Kontrola kapacity
+        long currentCount = shiftAssignmentRepository.countByShiftId(shiftId);
+        if (currentCount >= shift.getStation().getCapacityLimit()) {
+            throw new CapacityExceededException("Kapacita stanoviště vyčerpána.");
         }
 
         // 3. Pravidlo dostupnosti
-        boolean hasAvailability = availabilityRepository.existsByUserIdAndDateAndStatus(
-                userId,
-                shift.getStartTime().toLocalDate()
-        );
-        if (!hasAvailability) {
-            throw new AvailabilityNotProvidedException("Zaměstnanec " + user.getLastName() + " nemá nahlášený volný čas pro tento den.");
+        boolean hasAvail = availabilityRepository.existsByUserIdAndAvailableDateAndStatus(
+                userId, shift.getStartTime().toLocalDate(), AvailabilityStatus.AVAILABLE);
+        if (!hasAvail) {
+            throw new AvailabilityNotProvidedException("Zaměstnanec nemá nahlášenou dostupnost.");
         }
 
-        // 4. Kvalifikační předpoklad
-        boolean isQualified = qualificationService.verifyUserQualificationForStation(userId, shift.getStation().getId());
-        if (!isQualified) {
-            throw new MissingQualificationException("Zaměstnanec nemá potřebné zaškolení pro práci na tomto stanovišti.");
+        // 4. Kvalifikace
+        if (!qualificationService.verifyUserQualificationForStation(userId, shift.getStation().getId())) {
+            throw new MissingQualificationException("Chybí potřebná kvalifikace.");
         }
 
-        // 5. Overlap Check (Pravidlo nepřekrývání)
-        int overlappingCount = shiftAssignmentRepository.countOverlappingShifts(
+        // 5. Overlap Check - Check-then-Act vzor
+        // JPQL COUNT vrací long, proto používáme long overlappingCount
+        long overlappingCount = shiftAssignmentRepository.countOverlappingShifts(
                 userId,
                 shift.getStartTime().toLocalDateTime(),
                 shift.getEndTime().toLocalDateTime()
         );
+
         if (overlappingCount > 0) {
-            throw new ShiftCollisionException("Vznikla kolize: Zaměstnanec je v tomto čase již přiřazen na jiné stanoviště.");
+            throw new ShiftCollisionException("Zaměstnanec již v tomto čase má jinou směnu.");
         }
 
-        // (Poznámka: Metoda pro ověření maximálních odpracovaných hodin vůči ContractType by byla volána zde)
-
-        // 6. Uložení a vytvoření vazby
+        // 6. Act - Uložení
         ShiftAssignment assignment = new ShiftAssignment();
         assignment.setShift(shift);
-        assignment.setUser(user);
+        assignment.setEmployee(user); // Používáme opravený setter setEmployee
+        assignment.setStartTime(shift.getStartTime().toLocalDateTime());
+        assignment.setEndTime(shift.getEndTime().toLocalDateTime());
 
-        // Změníme stav dostupnosti na "konzumováno"
-        availabilityRepository.updateStatusByUserIdAndDate(userId, shift.getStartTime().toLocalDate());
+        availabilityRepository.updateStatusByUserIdAndAvailableDate(
+                userId, shift.getStartTime().toLocalDate(), AvailabilityStatus.UNAVAILABLE);
 
-        ShiftAssignment savedAssignment = shiftAssignmentRepository.save(assignment);
-        log.info("Uživatel {} byl úspěšně alokován na směnu {}", userId, shiftId);
-
-        return mapToDto(savedAssignment);
-    }
-
-    @Override
-    public void removeAssignment(UUID shiftAssignmentId) {
-        // Implementace pro odebrání přiřazení (s reverzí dostupnosti a případným upozorněním manažera)
+        return mapToDto(shiftAssignmentRepository.save(assignment));
     }
 
     private ShiftAssignmentDto mapToDto(ShiftAssignment assignment) {
-        // Zde využijeme MapStruct nebo manuální buildování DTO pro zamezení LazyInitializationException
+        // Pro převod z LocalDateTime (v entitě) na ZonedDateTime (v DTO) použijeme.atZone()
         return ShiftAssignmentDto.builder()
                 .id(assignment.getId())
                 .shiftId(assignment.getShift().getId())
-                .userId(assignment.getUser().getId())
-                .userName(assignment.getUser().getFirstName() + " " + assignment.getUser().getLastName())
+                .userId(assignment.getEmployee().getId())
+                .userName(assignment.getEmployee().getFirstName() + " " + assignment.getEmployee().getLastName())
                 .stationName(assignment.getShift().getStation().getName())
-                .startTime(assignment.getShift().getStartTime())
-                .endTime(assignment.getShift().getEndTime())
+                .startTime(assignment.getStartTime().atZone(java.time.ZoneId.of("UTC"))) // Opraveno na ZonedDateTime
+                .endTime(assignment.getEndTime().atZone(java.time.ZoneId.of("UTC")))     // Opraveno na ZonedDateTime
                 .build();
     }
 
-    // Zde by pokračovala implementace metody removeAssignment...
+    @Override public void removeAssignment(UUID id) { /*... */ }
 }

@@ -36,7 +36,7 @@ public class Contract {
      */
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
-    @Column(name = "type", columnDefinition = "contract_type", nullable = false)
+    @Column(name = "type", nullable = false)
     private ContractType type;
 
     /**

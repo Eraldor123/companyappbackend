@@ -47,7 +47,7 @@ public class Availability {
      */
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
-    @Column(name = "status", columnDefinition = "availability_status", nullable = false)
+    @Column(name = "status", nullable = false)
     private AvailabilityStatus status;
 
     /**

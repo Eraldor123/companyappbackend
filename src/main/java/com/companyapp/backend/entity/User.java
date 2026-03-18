@@ -49,8 +49,8 @@ public class User {
      */
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
-    @Column(name = "role", columnDefinition = "access_level", nullable = false)
-    private AccessLevel role = AccessLevel.BASIC;
+    @Column(name = "role", nullable = false)
+    private AccessLevel role;
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;

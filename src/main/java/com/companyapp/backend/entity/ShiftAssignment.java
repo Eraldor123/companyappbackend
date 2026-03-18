@@ -11,7 +11,8 @@ import java.util.UUID;
 @Table(
         name = "shift_assignments",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_shift_user", columnNames = {"shift_id", "user_id"})
+                // Opraveno na 'employee_id', aby to odpovídalo poli v Javě
+                @UniqueConstraint(name = "uk_shift_employee", columnNames = {"shift_id", "employee_id"})
         }
 )
 @Getter
@@ -23,19 +24,22 @@ public class ShiftAssignment {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    /**
-     * Oboustranná vazba na Shift, která umožňuje získat všechny přiřazení pro danou směnu. Na straně Shift je definována jako @OneToMany(mappedBy = "shift").
-     */
+    @Column(name = "start_time", nullable = false)
+    private java.time.LocalDateTime startTime;
+
+    @Column(name = "end_time", nullable = false)
+    private java.time.LocalDateTime endTime;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "shift_id", nullable = false)
     private Shift shift;
 
     /**
-     * Oboustranná vazba na User, která umožňuje získat všechny přiřazení pro daného uživatele. Na straně User je definována jako @OneToMany(mappedBy = "user").
+     * Změněno z 'user' na 'employee', aby zmizely červené chyby v Repository.
      */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    @JoinColumn(name = "employee_id", nullable = false)
+    private User employee;
 
     @Override
     public boolean equals(Object o) {
