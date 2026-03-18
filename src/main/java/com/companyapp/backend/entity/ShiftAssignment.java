@@ -23,10 +23,16 @@ public class ShiftAssignment {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    /**
+     * Oboustranná vazba na Shift, která umožňuje získat všechny přiřazení pro danou směnu. Na straně Shift je definována jako @OneToMany(mappedBy = "shift").
+     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "shift_id", nullable = false)
     private Shift shift;
 
+    /**
+     * Oboustranná vazba na User, která umožňuje získat všechny přiřazení pro daného uživatele. Na straně User je definována jako @OneToMany(mappedBy = "user").
+     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;

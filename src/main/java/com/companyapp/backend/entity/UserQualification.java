@@ -16,11 +16,17 @@ public class UserQualification {
     @EmbeddedId
     private UserQualificationId id = new UserQualificationId();
 
+    /**
+     * Oboustranná vazba na User, která umožňuje získat všechny kvalifikace pro daného uživatele. Na straně User je definována jako @OneToMany(mappedBy = "user").
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @MapsId("userId")
     @JoinColumn(name = "user_id")
     private User user;
 
+    /**
+     * Oboustranná vazba na Qualification, která umožňuje získat všechny uživatele, kteří mají tuto kvalifikaci. Na straně Qualification je definována jako @OneToMany(mappedBy = "qualification").
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @MapsId("qualificationId")
     @JoinColumn(name = "qualification_id")

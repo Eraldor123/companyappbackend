@@ -36,20 +36,42 @@ public class CustomUserDetails implements UserDetails {
         return user.getPin();
     }
 
+    /**
+     * Pro uživatelské jméno použijeme email, protože je unikátní a snadno zapamatovatelný.
+     * Toto rozhodnutí je v souladu s běžnými praktikami pro autentizaci uživatelů.
+     */
     @Override
     public String getUsername() {
         return user.getEmail();
     }
 
+    /**
+     * Všechny následující metody vrací true, protože v našem modelu není implementována logika pro expirované účty,
+     * @return true pro všechny stavy účtu, protože nejsou implementovány žádné restrikce
+     */
     @Override
     public boolean isAccountNonExpired() { return true; }
 
+    /**
+     * Zde kontrolujeme, zda je účet aktivní. Pokud není aktivní, považujeme ho za zablokovaný.
+     * Toto je jednoduchý způsob, jak implementovat základní správu stavu účtu bez potřeby složitější logiky.
+     * @return true pokud je účet aktivní, jinak false
+     */
     @Override
     public boolean isAccountNonLocked() { return user.getIsActive(); }
 
+    /**
+     * V našem modelu není implementována logika pro expirované přihlašovací údaje, takže vždy vracíme true.
+     * Toto je záměrné rozhodnutí, protože v současné fázi vývoje není potřeba řešit expirované přihlašovací údaje.
+     * @return true, protože nejsou implementovány žádné restrikce pro expirované přihlašovací údaje
+     */
     @Override
     public boolean isCredentialsNonExpired() { return true; }
 
+    /**
+     * Zde opět kontrolujeme, zda je účet aktivní. Pokud není aktivní, považujeme ho za neaktivní.
+     * @return true pokud je účet aktivní, jinak false
+     */
     @Override
     public boolean isEnabled() { return user.getIsActive(); }
 }

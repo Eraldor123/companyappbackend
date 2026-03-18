@@ -23,12 +23,17 @@ public class MainCategory {
     @Column(name = "name", nullable = false)
     private String name;
 
-    // Aplikace validace pro zajištění platného formátu HEX barvy
+    /**
+     * HEX kód barvy pro zobrazení kategorie. Musí být ve formátu #RRGGBB nebo #RGB.
+     */
     @Pattern(regexp = "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$",
             message = "Kód barvy musí být platný HEX formát začínající mřížkou a obsahující 3 nebo 6 znaků.")
     @Column(name = "hex_color")
     private String hexColor;
 
+    /**
+     * Indikátor, zda je kategorie aktivní. Neaktivní kategorie se nezobrazují v uživatelském rozhraní, ale zůstávají v databázi pro historické účely.
+     */
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 

@@ -20,6 +20,9 @@ public class ShiftTemplate {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
+    /**
+     * Oboustranná vazba na Station, která umožňuje získat všechny šablony směn pro danou stanici. Na straně Station je definována jako @OneToMany(mappedBy = "station").
+     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "station_id", nullable = false)
     private Station station;
@@ -28,6 +31,9 @@ public class ShiftTemplate {
     @Column(name = "name", nullable = false)
     private String name;
 
+    /**
+     * Počet pracovníků potřebných pro tuto šablonu směny. Tento atribut je důležitý pro plánování a zajištění dostatečného počtu pracovníků pro každou směnu založenou na této šabloně.
+     */
     @Column(name = "workers_needed")
     private Integer workersNeeded;
 

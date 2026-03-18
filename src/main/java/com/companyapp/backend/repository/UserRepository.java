@@ -1,0 +1,27 @@
+package com.companyapp.backend.repository;
+
+import com.companyapp.backend.entity.User;
+import com.companyapp.backend.enums.AccessLevel;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public interface UserRepository extends JpaRepository<User, UUID> {
+
+    Optional<User> findByEmailAndIsActiveTrue(String email);
+
+    Optional<User> findByPinAndIsActiveTrue(String pin);
+
+    List<User> findByRole(AccessLevel role);
+
+    @Modifying
+    @Query("UPDATE User u SET u.isActive = false WHERE u.id = :userId")
+    void deactivateUser(@Param("userId") UUID userId);
+}

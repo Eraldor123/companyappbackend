@@ -17,6 +17,9 @@ public class Station {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
+    /**
+     * Oboustranná vazba na MainCategory, která umožňuje získat všechny stanice pro danou kategorii. Na straně MainCategory je definována jako @OneToMany(mappedBy = "category").
+     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "category_id", nullable = false)
     private MainCategory category;
@@ -25,10 +28,15 @@ public class Station {
     @Column(name = "name", nullable = false)
     private String name;
 
+    /**
+     * Maximální počet zaměstnanců, kteří mohou být přiřazeni ke směně na této stanici. Tento atribut je důležitý pro plánování a zajištění dostatečného personálu pro každou směnu. Pokud není nastaven, předpokládá se, že není žádný limit.
+     */
     @Column(name = "capacity_limit")
     private Integer capacityLimit;
 
-    // Nepovinná kvalifikace (může obsluhovat kdokoli bez specifických znalostí)
+    /**
+     * Oboustranná vazba na Qualification, která umožňuje získat všechny stanice, které vyžadují danou kvalifikaci. Na straně Qualification je definována jako @OneToMany(mappedBy = "reqQualification").
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "req_qualification_id")
     private Qualification reqQualification;

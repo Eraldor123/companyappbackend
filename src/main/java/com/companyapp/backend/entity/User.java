@@ -26,15 +26,24 @@ public class User {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
+    /**
+     * E-mailová adresa uživatele, která slouží jako unikátní identifikátor pro přihlášení. Tento atribut je klíčový pro autentizaci a komunikaci s uživatelem. E-mail musí být v platném formátu a nesmí být prázdný. Navíc je nastaven jako unikátní a nenulový v databázi, aby se zabránilo duplicitám a zajistila integrita dat.
+     */
     @Email(message = "E-mail musí být v platném formátu.")
     @NotBlank(message = "E-mail nesmí být prázdný.")
     @Column(name = "email", unique = true, nullable = false)
     private String email;
 
+    /**
+     * PIN kód pro terminál, který slouží jako sekundární metoda autentizace pro přístup k terminálu. Tento kód je důležitý pro zajištění bezpečnosti a kontroly přístupu k terminálu, zejména v situacích, kdy je potřeba rychlý přístup bez nutnosti zadávání e-mailu. PIN musí být unikátní a nesmí být prázdný, aby se zabránilo konfliktům a zajistila integrita dat.
+     */
     @NotBlank(message = "PIN kód pro terminál je vyžadován.")
     @Column(name = "pin", unique = true, nullable = false)
     private String pin;
 
+    /**
+     * Úroveň přístupu uživatele, která určuje jeho oprávnění a role v systému. Tento atribut je klíčový pro řízení přístupu k různým funkcím a částem aplikace. Úroveň přístupu je reprezentována výčtem (enum) AccessLevel, který může obsahovat hodnoty jako BASIC, MANAGER, ADMIN atd. Tento atribut je uložen v databázi jako řetězec (STRING) a je definován jako nenulový, aby se zajistilo, že každý uživatel má přiřazenou úroveň přístupu.
+     */
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "role", columnDefinition = "access_level", nullable = false)
@@ -47,11 +56,12 @@ public class User {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    // Reprezentace asociačního vztahu k profilu. Vazba je líná (LAZY) pro maximální úsporu prostředků.
+    /**
+     * Oboustranná vazba na UserProfile, která umožňuje získat profil uživatele. Na straně UserProfile je definována jako @OneToOne, kde User je vlastníkem vztahu. Tento vztah je volitelný (optional = true), což znamená, že uživatel nemusí mít přiřazený profil. Kaskádování (cascade = CascadeType.ALL) zajišťuje, že operace provedené na uživateli (např. smazání) se automaticky projeví i na jeho profilu. FetchType.LAZY znamená, že profil bude načten z databáze pouze v případě potřeby, což optimalizuje výkon a snižuje zátěž na systém.
+     */
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY, optional = true)
     private UserProfile userProfile;
 
-    // Manuální implementace equals a hashCode na základě stabilního identifikátoru
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

@@ -22,10 +22,15 @@ public class UserProfile {
     @Column(name = "id")
     private UUID id;
 
+    /**
+     * Oboustranná vazba na User, která umožňuje získat profil pro daného uživatele. Na straně User je definována jako @OneToOne(mappedBy = "profile"). Tato vazba je nastavena jako @MapsId, což znamená, že primární klíč UserProfile bude stejný jako primární klíč User. To zajišťuje, že každý uživatel může mít pouze jeden profil a každý profil je spojen s jedním uživatelem. FetchType.LAZY znamená, že profil bude načten z databáze pouze tehdy, když bude explicitně požadován, což může zlepšit výkon při načítání uživatelů bez potřeby načítat jejich profily.
+     */
     @OneToOne(fetch = FetchType.LAZY)
     @MapsId
     @JoinColumn(name = "user_id")
     private User user;
+
+    // Základní informace o uživateli, které jsou důležité pro identifikaci a komunikaci s uživatelem. Tyto atributy jsou klíčové pro zobrazení informací o uživateli v aplikaci a pro personalizaci uživatelského zážitku. FirstName a LastName jsou povinné (NotBlank) a jsou uloženy jako nenulové sloupce v databázi, aby se zajistilo, že každý profil bude mít tyto základní informace.
 
     @NotBlank
     @Column(name = "first_name", nullable = false)

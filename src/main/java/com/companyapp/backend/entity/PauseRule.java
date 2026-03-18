@@ -18,10 +18,15 @@ public class PauseRule {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    // Práh, po kterém se pravidlo spustí, řešen absolutně bezchybným desetinným typem
+    /**
+     * Práh v hodinách, po kterém se má pauza spustit. Například 4.5 znamená, že pauza se spustí po 4 hodinách a 30 minutách práce.
+     */
     @Column(name = "trigger_hours", precision = 4, scale = 2)
     private BigDecimal triggerHours;
 
+    /**
+     * Délka pauzy v minutách. Například 15 znamená, že pauza bude trvat 15 minut.
+     */
     @Column(name = "pause_duration_minutes")
     private Integer pauseDurationMinutes;
 
