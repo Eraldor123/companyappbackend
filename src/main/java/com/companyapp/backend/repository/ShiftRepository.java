@@ -24,4 +24,5 @@ public interface ShiftRepository extends JpaRepository<Shift, UUID> {
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime,
             @Param("stationId") Integer stationId);
+    List<Shift> findByShiftDateBetween(LocalDate start, LocalDate end);
 }

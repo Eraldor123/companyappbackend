@@ -28,7 +28,7 @@ public class TerminalAuthenticationServiceImpl implements TerminalAuthentication
                 .orElseThrow(() -> new InvalidPinException("Zadané Docházkové ID nebo PIN je nesprávný."));
 
         // Ověření PINu pomocí BCrypt mechanismu (prevence proti plain text úniku)
-        if (!passwordEncoder.matches(rawPin, user.getPinHash())) {
+        if (!passwordEncoder.matches(rawPin, user.getPin())) {
             log.warn("Neúspěšný pokus o přihlášení na terminálu pro Docházkové ID: {}", attendanceId);
             throw new InvalidPinException("Zadané Docházkové ID nebo PIN je nesprávný.");
         }

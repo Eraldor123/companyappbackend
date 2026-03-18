@@ -1,10 +1,12 @@
 package com.companyapp.backend.services.impl;
 
 import com.companyapp.backend.entity.Qualification;
+import com.companyapp.backend.entity.Station; // CHYBĚJÍCÍ IMPORT
 import com.companyapp.backend.entity.UserQualification;
 import com.companyapp.backend.repository.StationRepository;
 import com.companyapp.backend.repository.UserQualificationRepository;
 import com.companyapp.backend.services.QualificationService;
+import com.companyapp.backend.services.exception.ResourceNotFoundException; // CHYBĚJÍCÍ IMPORT
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,12 +35,12 @@ public class QualificationServiceImpl implements QualificationService {
 
         // Zjistíme, které kvalifikace smazat (jsou v DB, ale už ne v novém setu)
         Set<Qualification> toRemove = currentQualificationIds.stream()
-                .filter(id ->!newQualificationIds.contains(id))
+                .filter(id -> !newQualificationIds.contains(id))
                 .collect(Collectors.toSet());
 
         // Zjistíme, které přidat (jsou v novém setu, ale ještě ne v DB)
         Set<UUID> toAdd = newQualificationIds.stream()
-                .filter(id ->!currentQualificationIds.contains(id))
+                .filter(id -> !currentQualificationIds.contains(id))
                 .collect(Collectors.toSet());
 
         // userQualificationRepository.deleteAllByUserIdAndQualificationIdIn(userId, toRemove);
@@ -50,16 +52,17 @@ public class QualificationServiceImpl implements QualificationService {
     @Override
     @Transactional(readOnly = true)
     public boolean verifyUserQualificationForStation(UUID userId, Integer stationId) {
-        // Najdeme stanoviště a zjistíme, jaké kvalifikace vyžaduje
-        // Station station = stationRepository.findById(stationId).orElseThrow();
-        // Set<Qualification> requiredQuals = station.getRequiredQualifications();
+        Station station = stationRepository.findById(stationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Stanoviště nenalezeno."));
 
-        // Pokud stanoviště nevyžaduje žádnou specifickou kvalifikaci, vracíme rovnou true
-        // if (requiredQuals.isEmpty()) return true;
+        // Pokud stanoviště nevyžaduje žádnou kvalifikaci, uživatel může pracovat
+        if (station.getReqQualification() == null) {
+            return true;
+        }
 
-        // Jinak porovnáme requiredQuals s userQualificationRepository.findByUserId(userId)
-        // a ověříme, zda uživatel splňuje VŠECHNY požadavky.
-
-        return true; // Zástupná návratová hodnota
+        // Pokud vyžaduje, zjistíme, zda ji uživatel má (využijeme metodu, kterou jsi připravil v repozitáři)
+        Integer requiredQualId = station.getReqQualification().getId();
+        return userQualificationRepository.findByUserId(userId).stream()
+                .anyMatch(uq -> uq.getQualification().getId().equals(requiredQualId));
     }
 }

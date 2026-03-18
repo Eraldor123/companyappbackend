@@ -92,5 +92,16 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
                 .build();
     }
 
-    @Override public void removeAssignment(UUID id) { /*... */ }
+    @Override
+    @Transactional
+    public void removeAssignment(UUID id) {
+        log.info("Odebírám uživatele z přiřazení směny: {}", id);
+        if (!shiftAssignmentRepository.existsById(id)) {
+            throw new ResourceNotFoundException("Přiřazení směny neexistuje.");
+        }
+        shiftAssignmentRepository.deleteById(id);
+
+        // V praxi bys zde možná chtěl i změnit Availability uživatele zpět na AVAILABLE pro daný den,
+        // záleží na tvých firemních pravidlech.
+    }
 }

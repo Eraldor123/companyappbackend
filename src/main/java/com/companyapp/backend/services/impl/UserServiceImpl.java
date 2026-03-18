@@ -47,9 +47,14 @@ public class UserServiceImpl implements UserService {
         user.setAccessLevel(request.getAccessLevel());
         user.setActive(true);
 
-        // Zde by se standardně generoval PIN, my jej zahashujeme
-        // user.setPinHash(passwordEncoder.encode(vygenerovanyPin));
+        // --- NOVÝ KÓD PRO HESLO/PIN ---
+        // Vygenerujeme náhodný 4místný PIN (např. "4821")
+        String generatedPin = String.format("%04d", new java.util.Random().nextInt(10000));
+        log.info("Vygenerován PIN pro uživatele (v praxi odeslat na email): {}", generatedPin);
 
+        // PIN zašifrujeme pomocí BCrypt a uložíme do databáze
+        user.setPin(passwordEncoder.encode(generatedPin));
+        // ------------------------------
         // 3. Vytvoření přidruženého profilu
         UserProfile profile = new UserProfile();
         profile.setFirstName(request.getFirstName());
@@ -90,8 +95,15 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public UserProfileDto getUserProfile(UUID userId) {
-        // Implementace vyhledání a mapování
-        return null;
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Uživatel nenalezen."));
+
+        // Entita User má vazbu OneToOne na UserProfile
+        if (user.getUserProfile() == null) {
+            throw new ResourceNotFoundException("Profil uživatele nenalezen.");
+        }
+
+        return mapToProfileDto(user, user.getUserProfile());
     }
 
     private UserProfileDto mapToProfileDto(User user, UserProfile profile) {
