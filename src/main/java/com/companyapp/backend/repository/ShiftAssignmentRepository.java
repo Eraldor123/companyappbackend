@@ -23,4 +23,12 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
     );
 
     long countByShiftId(UUID shiftId);
+
+    @Query("SELECT sa FROM ShiftAssignment sa WHERE sa.employee.id = :userId " +
+            "AND sa.startTime <= :windowEnd AND sa.endTime >= :windowStart")
+    java.util.List<ShiftAssignment> findCurrentAssignments(
+            @Param("userId") UUID userId,
+            @Param("windowStart") java.time.LocalDateTime windowStart,
+            @Param("windowEnd") java.time.LocalDateTime windowEnd
+    );
 }

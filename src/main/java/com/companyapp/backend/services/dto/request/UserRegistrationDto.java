@@ -24,9 +24,6 @@ public class UserRegistrationDto {
 
     private String phone;
 
-    @NotBlank(message = "Docházkové ID je povinné.")
-    private String attendanceId;
-
     @NotNull(message = "Smluvní vztah musí být specifikován.")
     private ContractType contractType; // DPP, HPP, OSVC
 

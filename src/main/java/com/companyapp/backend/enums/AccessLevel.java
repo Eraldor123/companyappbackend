@@ -8,5 +8,5 @@ package com.companyapp.backend.enums;
  * - BASIC: Nejnižší úroveň přístupu, umožňuje pouze zobrazení informací o směnách a vlastních přiřazeních, bez možnosti úprav.
  */
 public enum AccessLevel {
-    ADMIN, MANAGEMENT, PLANNER, BASIC;;
+    ADMIN, MANAGEMENT, PLANNER, BASIC, TERMINAL;;
 }

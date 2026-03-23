@@ -100,6 +100,38 @@ public class AttendanceProcessingServiceImpl implements AttendanceProcessingServ
         throw new UnsupportedOperationException("Tato metoda zatím není implementována.");
     }
 
+    @Override
+    @Transactional
+    public AttendanceLogDto processTerminalAction(UUID userId) {
+        Instant now = Instant.now();
+        // Získáme aktuální čas pro porovnání s databází
+        java.time.LocalDateTime localNow = ZonedDateTime.ofInstant(now, ZoneId.of("UTC")).toLocalDateTime();
+
+        // 1. SCÉNÁŘ: Uživatel je v práci a chce odejít (má otevřený záznam docházky)
+        java.util.Optional<AttendanceLog> openLog = attendanceLogRepository.findOpenLogForUser(userId);
+        if (openLog.isPresent()) {
+            log.info("Nalezen otevřený záznam. Provádím ODCHOD pro uživatele {}.", userId);
+            return clockOut(userId, now);
+        }
+
+        // 2. SCÉNÁŘ: Uživatel není v práci, zkusíme najít jeho aktuální směnu
+        // Nastavíme toleranci: Může si pípnout nejdříve 2 hodiny před začátkem směny a nejpozději 2 hodiny po jejím konci
+        java.time.LocalDateTime windowStart = localNow.minusHours(2);
+        java.time.LocalDateTime windowEnd = localNow.plusHours(2);
+
+        java.util.List<ShiftAssignment> assignments = shiftAssignmentRepository.findCurrentAssignments(userId, windowStart, windowEnd);
+
+        if (assignments.isEmpty()) {
+            throw new IllegalStateException("Nemáte momentálně naplánovanou žádnou směnu.");
+        }
+
+        // Vezmeme první nalezenou směnu (v praxi by se dalo řešit, co když jich má víc ve stejný čas)
+        ShiftAssignment currentAssignment = assignments.get(0);
+
+        log.info("Nalezena dnešní směna. Provádím PŘÍCHOD pro uživatele {}.", userId);
+        return clockIn(userId, currentAssignment.getId(), now);
+    }
+
     private AttendanceLogDto mapToDto(AttendanceLog logEntity) {
         return AttendanceLogDto.builder()
                 .id(logEntity.getId())

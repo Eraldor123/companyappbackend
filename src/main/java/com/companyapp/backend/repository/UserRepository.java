@@ -28,8 +28,4 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     void deactivateUser(@Param("userId") UUID userId);
 
     boolean existsByEmail(@Email(message = "E-mail nemá správný formát.") @NotBlank(message = "E-mail je povinný.") String email);
-
-    boolean existsByAttendanceId(@NotBlank(message = "Docházkové ID je povinné.") String attendanceId);
-
-    <T> ScopedValue<User> findByAttendanceId(String attendanceId);
 }

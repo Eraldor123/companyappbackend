@@ -11,6 +11,7 @@ import java.util.UUID;
 public interface AttendanceProcessingService {
     AttendanceLogDto clockIn(UUID userId, UUID shiftAssignmentId, Instant clockInTime);
     AttendanceLogDto clockOut(UUID userId, Instant clockOutTime);
+    AttendanceLogDto processTerminalAction(UUID userId);
     void rejectOvertime(UUID attendanceLogId, String reason);
     List<ShiftAssignmentDto> splitShiftAssignment(UUID shiftAssignmentId, ZonedDateTime breakStart, ZonedDateTime breakEnd);
 }

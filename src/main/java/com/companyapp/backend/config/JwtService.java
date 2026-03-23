@@ -34,11 +34,25 @@ public class JwtService {
     }
 
     public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
+
+        // Výchozí platnost: 24 hodin
+        long expirationTime = 1000L * 60 * 60 * 24;
+
+        // Zjistíme, zda se hlásí terminál
+        boolean isTerminal = userDetails.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_TERMINAL"));
+
+        if (isTerminal) {
+            // Platnost: 10 let (přibližně)
+            expirationTime = 1000L * 60 * 60 * 24 * 365 * 10;
+        }
+
         return Jwts.builder()
                 .setClaims(extraClaims)
                 .setSubject(userDetails.getUsername())
                 .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 24)) // Platnost 24 hodin
+                // Zde aplikujeme naši proměnnou expirationTime místo té natvrdo vypsané
+                .setExpiration(new Date(System.currentTimeMillis() + expirationTime))
                 .signWith(getSignInKey(), SignatureAlgorithm.HS256)
                 .compact();
     }

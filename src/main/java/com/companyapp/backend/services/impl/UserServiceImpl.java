@@ -36,24 +36,22 @@ public class UserServiceImpl implements UserService {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new DuplicateResourceException("Uživatel s e-mailem " + request.getEmail() + " již existuje.");
         }
-        if (userRepository.existsByAttendanceId(request.getAttendanceId())) {
-            throw new DuplicateResourceException("Docházkové ID " + request.getAttendanceId() + " je již obsazeno.");
-        }
 
         // 2. Vytvoření doménové entity User
         User user = new User();
         user.setEmail(request.getEmail());
-        user.setAttendanceId(request.getAttendanceId());
         user.setAccessLevel(request.getAccessLevel());
         user.setActive(true);
 
-        // --- NOVÝ KÓD PRO HESLO/PIN ---
-        // Vygenerujeme náhodný 4místný PIN (např. "4821")
-        String generatedPin = String.format("%04d", new java.util.Random().nextInt(10000));
-        log.info("Vygenerován PIN pro uživatele (v praxi odeslat na email): {}", generatedPin);
+        String generatedPin;
+        String hashedPin;
+        do {
+            generatedPin = user.getAccessLevel() == AccessLevel.TERMINAL ? "0000" : String.format("%04d", new java.util.Random().nextInt(10000));
+            hashedPin = passwordEncoder.encode(generatedPin);
+        } while (userRepository.findByPinAndIsActiveTrue(hashedPin).isPresent()); // Cyklus běží, dokud nenajde volný PIN
 
-        // PIN zašifrujeme pomocí BCrypt a uložíme do databáze
-        user.setPin(passwordEncoder.encode(generatedPin));
+        log.info("Vygenerován UNIKÁTNÍ PIN pro uživatele (odeslat na email): {}", generatedPin);
+        user.setPin(hashedPin);
         // ------------------------------
         // 3. Vytvoření přidruženého profilu
         UserProfile profile = new UserProfile();
@@ -112,7 +110,6 @@ public class UserServiceImpl implements UserService {
                 .firstName(profile.getFirstName())
                 .lastName(profile.getLastName())
                 .email(user.getEmail())
-                .attendanceId(user.getAttendanceId())
                 .isActive(user.isActive())
                 .build();
     }

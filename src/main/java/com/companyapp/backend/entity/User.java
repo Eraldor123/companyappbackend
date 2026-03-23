@@ -41,7 +41,7 @@ public class User {
      * PIN kód pro terminál, který slouží jako sekundární metoda autentizace pro přístup k terminálu. Tento kód je důležitý pro zajištění bezpečnosti a kontroly přístupu k terminálu, zejména v situacích, kdy je potřeba rychlý přístup bez nutnosti zadávání e-mailu. PIN musí být unikátní a nesmí být prázdný, aby se zabránilo konfliktům a zajistila integrita dat.
      */
     @NotBlank(message = "PIN kód pro terminál je vyžadován.")
-    @Column(name = "pin", unique = true, nullable = false)
+    @Column(name = "pin", nullable = false) // U PINu bych zrušil unique=true, dva lidi mohou mít teoreticky stejný hash
     private String pin;
 
     /**
@@ -62,7 +62,7 @@ public class User {
     /**
      * Oboustranná vazba na UserProfile, která umožňuje získat profil uživatele. Na straně UserProfile je definována jako @OneToOne, kde User je vlastníkem vztahu. Tento vztah je volitelný (optional = true), což znamená, že uživatel nemusí mít přiřazený profil. Kaskádování (cascade = CascadeType.ALL) zajišťuje, že operace provedené na uživateli (např. smazání) se automaticky projeví i na jeho profilu. FetchType.LAZY znamená, že profil bude načten z databáze pouze v případě potřeby, což optimalizuje výkon a snižuje zátěž na systém.
      */
-    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY, optional = true)
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, optional = true)
     private UserProfile userProfile;
 
     @Override
@@ -78,9 +78,6 @@ public class User {
         return getClass().hashCode();
     }
 
-    public void setAttendanceId(@NotBlank(message = "Docházkové ID je povinné.") String attendanceId) {
-        this.pin = attendanceId;
-    }
 
     public void setAccessLevel(@NotNull(message = "Úroveň přístupu musí být zvolena.") AccessLevel accessLevel) {
         this.role = accessLevel;
@@ -88,10 +85,6 @@ public class User {
 
     public void setActive(boolean b) {
         this.isActive = b;
-    }
-
-    public String getAttendanceId() {
-        return this.pin;
     }
 
      public AccessLevel getAccessLevel() {

@@ -22,20 +22,16 @@ public class TerminalAuthenticationServiceImpl implements TerminalAuthentication
 
     @Override
     @Transactional(readOnly = true)
-    public UUID authenticateTerminal(String attendanceId, String rawPin) {
-        // Vyhledáme uživatele podle jeho unikátního docházkového ID
-        User user = userRepository.findByAttendanceId(attendanceId)
-                .orElseThrow(() -> new InvalidPinException("Zadané Docházkové ID nebo PIN je nesprávný."));
+    public UUID authenticateTerminal(String rawPin) {
+        // Zahashujeme zadaný PIN z terminálu
+        String hashedPin = passwordEncoder.encode(rawPin);
 
-        // Ověření PINu pomocí BCrypt mechanismu (prevence proti plain text úniku)
-        if (!passwordEncoder.matches(rawPin, user.getPin())) {
-            log.warn("Neúspěšný pokus o přihlášení na terminálu pro Docházkové ID: {}", attendanceId);
-            throw new InvalidPinException("Zadané Docházkové ID nebo PIN je nesprávný.");
-        }
-
-        if (!user.isActive()) {
-            throw new InvalidPinException("Tento účet byl deaktivován.");
-        }
+        // Najdeme uživatele rovnou podle hashe (v User.java už máš @Column(unique = true))
+        User user = userRepository.findByPinAndIsActiveTrue(hashedPin)
+                .orElseThrow(() -> {
+                    log.warn("Neúspěšný pokus o přihlášení na terminálu. Nesprávný PIN.");
+                    return new InvalidPinException("Zadaný PIN je nesprávný.");
+                });
 
         log.info("Uživatel s ID {} se úspěšně autorizoval na terminálu.", user.getId());
         return user.getId();

@@ -1,5 +1,6 @@
 package com.companyapp.backend.config;
 
+import com.companyapp.backend.HashUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -47,7 +48,17 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        return new PasswordEncoder() {
+            @Override
+            public String encode(CharSequence rawPassword) {
+                return HashUtil.hash(rawPassword.toString());
+            }
+
+            @Override
+            public boolean matches(CharSequence rawPassword, String encodedPassword) {
+                return HashUtil.hash(rawPassword.toString()).equals(encodedPassword);
+            }
+        };
     }
 
     // Nastavení CORS (Povolení pro frontend, např. React na localhost:3000 nebo Vite na 5173)
