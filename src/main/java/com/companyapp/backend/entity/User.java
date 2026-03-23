@@ -47,10 +47,11 @@ public class User {
     /**
      * Úroveň přístupu uživatele, která určuje jeho oprávnění a role v systému. Tento atribut je klíčový pro řízení přístupu k různým funkcím a částem aplikace. Úroveň přístupu je reprezentována výčtem (enum) AccessLevel, který může obsahovat hodnoty jako BASIC, MANAGER, ADMIN atd. Tento atribut je uložen v databázi jako řetězec (STRING) a je definován jako nenulový, aby se zajistilo, že každý uživatel má přiřazenou úroveň přístupu.
      */
+    @ElementCollection(fetch = FetchType.EAGER) // EAGER zajistí, že se role načtou hned s uživatelem
+    @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))
     @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "role", nullable = false)
-    private AccessLevel role;
+    private java.util.Set<AccessLevel> roles = new java.util.HashSet<>();
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
@@ -78,17 +79,8 @@ public class User {
         return getClass().hashCode();
     }
 
-
-    public void setAccessLevel(@NotNull(message = "Úroveň přístupu musí být zvolena.") AccessLevel accessLevel) {
-        this.role = accessLevel;
-    }
-
     public void setActive(boolean b) {
         this.isActive = b;
-    }
-
-     public AccessLevel getAccessLevel() {
-        return this.role;
     }
 
      public boolean isActive() {

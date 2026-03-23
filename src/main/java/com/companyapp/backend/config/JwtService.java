@@ -36,7 +36,8 @@ public class JwtService {
     public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
 
         // Výchozí platnost: 24 hodin
-        long expirationTime = 1000L * 60 * 60 * 24;
+        long expirationTime = 1000L * 60 * 60 * 24; //otravný při testování
+        // long expirationTime = 1000L;
 
         // Zjistíme, zda se hlásí terminál
         boolean isTerminal = userDetails.getAuthorities().stream()
@@ -44,7 +45,8 @@ public class JwtService {
 
         if (isTerminal) {
             // Platnost: 10 let (přibližně)
-            expirationTime = 1000L * 60 * 60 * 24 * 365 * 10;
+            //expirationTime = 1000L * 60 * 60 * 24 * 365 * 10;
+            expirationTime = 1000L;
         }
 
         return Jwts.builder()

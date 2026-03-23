@@ -52,7 +52,8 @@ public class AuthController {
                 .token(jwtToken)
                 .userId(user.getId())
                 .email(user.getEmail())
-                .role(user.getRole().name())
+                // Převedeme Set<AccessLevel> na Set<String>
+                .roles(user.getRoles().stream().map(Enum::name).collect(java.util.stream.Collectors.toSet()))
                 .build());
     }
 

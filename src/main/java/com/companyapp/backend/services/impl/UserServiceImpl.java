@@ -40,15 +40,16 @@ public class UserServiceImpl implements UserService {
         // 2. Vytvoření doménové entity User
         User user = new User();
         user.setEmail(request.getEmail());
-        user.setAccessLevel(request.getAccessLevel());
+        user.setRoles(request.getAccessLevels()); // ZMĚNA: Používáme množné číslo
         user.setActive(true);
 
         String generatedPin;
         String hashedPin;
         do {
-            generatedPin = user.getAccessLevel() == AccessLevel.TERMINAL ? "0000" : String.format("%04d", new java.util.Random().nextInt(10000));
+            // ZMĚNA: Ptáme se kolekce, zda obsahuje roli TERMINAL
+            generatedPin = user.getRoles().contains(AccessLevel.TERMINAL) ? "0000" : String.format("%04d", new java.util.Random().nextInt(10000));
             hashedPin = passwordEncoder.encode(generatedPin);
-        } while (userRepository.findByPinAndIsActiveTrue(hashedPin).isPresent()); // Cyklus běží, dokud nenajde volný PIN
+        } while (userRepository.findByPinAndIsActiveTrue(hashedPin).isPresent());
 
         log.info("Vygenerován UNIKÁTNÍ PIN pro uživatele (odeslat na email): {}", generatedPin);
         user.setPin(hashedPin);

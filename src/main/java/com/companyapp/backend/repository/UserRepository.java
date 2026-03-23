@@ -21,8 +21,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByPinAndIsActiveTrue(String pin);
 
-    List<User> findByRole(AccessLevel role);
-
     @Modifying
     @Query("UPDATE User u SET u.isActive = false WHERE u.id = :userId")
     void deactivateUser(@Param("userId") UUID userId);

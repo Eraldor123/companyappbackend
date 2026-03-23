@@ -4,10 +4,12 @@ import com.companyapp.backend.enums.AccessLevel;
 import com.companyapp.backend.enums.ContractType;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.Set;
 
 @Data
 public class UserRegistrationDto {
@@ -27,8 +29,8 @@ public class UserRegistrationDto {
     @NotNull(message = "Smluvní vztah musí být specifikován.")
     private ContractType contractType; // DPP, HPP, OSVC
 
-    @NotNull(message = "Úroveň přístupu musí být zvolena.")
-    private AccessLevel accessLevel;
+    @jakarta.validation.constraints.NotEmpty(message = "Musí být zvolena alespoň jedna úroveň přístupu.")
+    private java.util.Set<AccessLevel> accessLevels;
 
     // --- Specifická pole závislá na typu úvazku ---
     private BigDecimal hourlyWage;     // Pro DPP / HPP / OSVČ (pokud je placen hodinově)
@@ -40,4 +42,5 @@ public class UserRegistrationDto {
 
     // UI checkbox: "Zaslat heslo"
     private boolean sendPassword;
+
 }
