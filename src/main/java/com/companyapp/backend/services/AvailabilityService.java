@@ -1,6 +1,6 @@
 package com.companyapp.backend.services;
 
-import com.companyapp.backend.dto.AvailabilityDTO;
+import com.companyapp.backend.services.dto.request.AvailabilityDTO;
 import com.companyapp.backend.services.dto.request.MonthlyAvailabilityRequestDto;
 import java.time.YearMonth;
 import java.util.List;

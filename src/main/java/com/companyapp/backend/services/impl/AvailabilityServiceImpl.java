@@ -1,6 +1,6 @@
 package com.companyapp.backend.services.impl;
 
-import com.companyapp.backend.dto.AvailabilityDTO;
+import com.companyapp.backend.services.dto.request.AvailabilityDTO;
 import com.companyapp.backend.entity.Availability;
 import com.companyapp.backend.repository.AvailabilityRepository;
 import com.companyapp.backend.services.AvailabilityService;
