@@ -18,7 +18,7 @@ public class Station {
     private Integer id;
 
     /**
-     * Oboustranná vazba na MainCategory, která umožňuje získat všechny stanice pro danou kategorii. Na straně MainCategory je definována jako @OneToMany(mappedBy = "category").
+     * Oboustranná vazba na MainCategory, která umožňuje získat všechny stanice pro danou kategorii.
      */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "category_id", nullable = false)
@@ -29,18 +29,20 @@ public class Station {
     private String name;
 
     /**
-     * Maximální počet zaměstnanců, kteří mohou být přiřazeni ke směně na této stanici. Tento atribut je důležitý pro plánování a zajištění dostatečného personálu pro každou směnu. Pokud není nastaven, předpokládá se, že není žádný limit.
+     * Maximální počet zaměstnanců, kteří mohou být přiřazeni ke směně na této stanici.
      */
     @Column(name = "capacity_limit")
     private Integer capacityLimit;
 
     /**
-     * Oboustranná vazba na Qualification, která umožňuje získat všechny stanice, které vyžadují danou kvalifikaci. Na straně Qualification je definována jako @OneToMany(mappedBy = "reqQualification").
+     * Indikátor, zda je pro práci na této stanici vyžadována specifická kvalifikace (true/false).
      */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "req_qualification_id")
-    private Qualification reqQualification;
+    @Column(name = "needs_qualification", nullable = false)
+    private Boolean needsQualification = false;
 
+    /**
+     * Indikátor, zda je stanoviště aktivní.
+     */
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 
@@ -49,7 +51,7 @@ public class Station {
         if (this == o) return true;
         if (!(o instanceof Station)) return false;
         Station that = (Station) o;
-        return id!= null && id.equals(that.getId());
+        return id != null && id.equals(that.getId());
     }
 
     @Override

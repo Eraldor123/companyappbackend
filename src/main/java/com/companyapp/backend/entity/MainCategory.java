@@ -1,6 +1,5 @@
 package com.companyapp.backend.entity;
 
-
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -19,7 +18,7 @@ public class MainCategory {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @NotBlank
+    @NotBlank(message = "Název kategorie nesmí být prázdný.")
     @Column(name = "name", nullable = false)
     private String name;
 
@@ -32,7 +31,13 @@ public class MainCategory {
     private String hexColor;
 
     /**
-     * Indikátor, zda je kategorie aktivní. Neaktivní kategorie se nezobrazují v uživatelském rozhraní, ale zůstávají v databázi pro historické účely.
+     * Pořadí pro zobrazení v uživatelském rozhraní.
+     */
+    @Column(name = "sort_order")
+    private Integer sortOrder = 1;
+
+    /**
+     * Indikátor, zda je kategorie aktivní.
      */
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
@@ -42,7 +47,7 @@ public class MainCategory {
         if (this == o) return true;
         if (!(o instanceof MainCategory)) return false;
         MainCategory that = (MainCategory) o;
-        return id!= null && id.equals(that.getId());
+        return id != null && id.equals(that.getId());
     }
 
     @Override
@@ -50,6 +55,7 @@ public class MainCategory {
         return getClass().hashCode();
     }
 
+    // Ponecháno pro kompatibilitu se stávajícím kódem
     public void setActive(boolean b) {
         this.isActive = b;
     }

@@ -74,7 +74,7 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
         assignment.setEndTime(shift.getEndTime().toLocalDateTime());
 
         availabilityRepository.updateStatusByUserIdAndAvailableDate(
-                userId, shift.getStartTime().toLocalDate(), AvailabilityStatus.UNAVAILABLE);
+                userId, shift.getStartTime().toLocalDate());
 
         return mapToDto(shiftAssignmentRepository.save(assignment));
     }
