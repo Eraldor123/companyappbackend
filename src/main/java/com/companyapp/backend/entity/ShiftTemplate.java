@@ -1,6 +1,5 @@
 package com.companyapp.backend.entity;
 
-
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
@@ -20,9 +19,6 @@ public class ShiftTemplate {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    /**
-     * Oboustranná vazba na Station, která umožňuje získat všechny šablony směn pro danou stanici. Na straně Station je definována jako @OneToMany(mappedBy = "station").
-     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "station_id", nullable = false)
     private Station station;
@@ -31,9 +27,6 @@ public class ShiftTemplate {
     @Column(name = "name", nullable = false)
     private String name;
 
-    /**
-     * Počet pracovníků potřebných pro tuto šablonu směny. Tento atribut je důležitý pro plánování a zajištění dostatečného počtu pracovníků pro každou směnu založenou na této šabloně.
-     */
     @Column(name = "workers_needed")
     private Integer workersNeeded;
 
@@ -43,16 +36,30 @@ public class ShiftTemplate {
     @Column(name = "end_time")
     private LocalTime endTime;
 
+    @Column(name = "start_time_2")
+    private LocalTime startTime2;
+
+    @Column(name = "end_time_2")
+    private LocalTime endTime2;
+
+    // --- PŘIDÁNO: Aktivní stav ---
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof ShiftTemplate)) return false;
         ShiftTemplate that = (ShiftTemplate) o;
-        return id!= null && id.equals(that.getId());
+        return id != null && id.equals(that.getId());
     }
 
     @Override
     public int hashCode() {
         return getClass().hashCode();
+    }
+
+    public void setActive(boolean b) {
+        this.isActive = b;
     }
 }

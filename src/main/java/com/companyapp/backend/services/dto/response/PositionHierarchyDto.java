@@ -15,6 +15,7 @@ public class PositionHierarchyDto {
         private Integer id;
         private String name;
         private String color;
+        private Boolean isActive;
         private List<StationNodeDto> stations;
     }
 
@@ -23,6 +24,7 @@ public class PositionHierarchyDto {
     public static class StationNodeDto {
         private Integer id;
         private String name;
+        private Boolean isActive;
         private List<TemplateNodeDto> templates;
     }
 
@@ -32,6 +34,11 @@ public class PositionHierarchyDto {
         private Integer id;
         private String name;
         private String timeRange;
+        private String startTime;
+        private String endTime;
+        private String startTime2;
+        private String endTime2;
         private Integer workersNeeded;
+        private Boolean isActive;
     }
 }

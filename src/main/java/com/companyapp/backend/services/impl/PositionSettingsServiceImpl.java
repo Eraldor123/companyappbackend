@@ -26,32 +26,42 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     @Override
     @Transactional(readOnly = true)
     public PositionHierarchyDto getFullHierarchy() {
-        // 1. Načteme všechny aktivní kategorie [cite: 56]
-        List<MainCategory> categories = categoryRepository.findByIsActiveTrue();
+        // ZMĚNA: Načteme VŠECHNY kategorie (aby frontend mohl zobrazit i ty neaktivní přes očičko)
+        List<MainCategory> categories = categoryRepository.findAll();
 
         List<PositionHierarchyDto.CategoryNodeDto> categoryNodes = categories.stream().map(cat -> {
-            // 2. Pro každou kategorii najdeme její stanoviště [cite: 51]
-            // OPRAVA: Použit cat.getId() místo cat.id
+
             List<Station> stations = stationRepository.findAll().stream()
                     .filter(s -> s.getCategory().getId().equals(cat.getId()))
                     .collect(Collectors.toList());
 
             List<PositionHierarchyDto.StationNodeDto> stationNodes = stations.stream().map(stat -> {
-                // 3. Pro každé stanoviště najdeme jeho šablony [cite: 58]
+
                 List<ShiftTemplate> templates = templateRepository.findByStationId(stat.getId());
 
-                List<PositionHierarchyDto.TemplateNodeDto> templateNodes = templates.stream().map(tmpl ->
-                        PositionHierarchyDto.TemplateNodeDto.builder()
-                                .id(tmpl.getId())
-                                .name(tmpl.getName())
-                                .timeRange(tmpl.getStartTime() + " - " + tmpl.getEndTime())
-                                .workersNeeded(tmpl.getWorkersNeeded())
-                                .build()
-                ).collect(Collectors.toList());
+                List<PositionHierarchyDto.TemplateNodeDto> templateNodes = templates.stream().map(tmpl -> {
+                    String timeRange = tmpl.getStartTime() + " - " + tmpl.getEndTime();
+                    if (tmpl.getStartTime2() != null && tmpl.getEndTime2() != null) {
+                        timeRange += " a " + tmpl.getStartTime2() + " - " + tmpl.getEndTime2();
+                    }
+
+                    return PositionHierarchyDto.TemplateNodeDto.builder()
+                            .id(tmpl.getId())
+                            .name(tmpl.getName())
+                            .timeRange(timeRange)
+                            .startTime(tmpl.getStartTime() != null ? tmpl.getStartTime().toString() : null)
+                            .endTime(tmpl.getEndTime() != null ? tmpl.getEndTime().toString() : null)
+                            .startTime2(tmpl.getStartTime2() != null ? tmpl.getStartTime2().toString() : null)
+                            .endTime2(tmpl.getEndTime2() != null ? tmpl.getEndTime2().toString() : null)
+                            .workersNeeded(tmpl.getWorkersNeeded())
+                            .isActive(tmpl.getIsActive()) // PŘIDÁNO
+                            .build();
+                }).collect(Collectors.toList());
 
                 return PositionHierarchyDto.StationNodeDto.builder()
                         .id(stat.getId())
                         .name(stat.getName())
+                        .isActive(stat.getIsActive()) // PŘIDÁNO (Tohle opraví ten bug ve frontendu!)
                         .templates(templateNodes)
                         .build();
             }).collect(Collectors.toList());
@@ -60,11 +70,11 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
                     .id(cat.getId())
                     .name(cat.getName())
                     .color(cat.getHexColor())
+                    .isActive(cat.getIsActive()) // PŘIDÁNO
                     .stations(stationNodes)
                     .build();
         }).collect(Collectors.toList());
 
-        // OPRAVA: Použito .builder() místo .PositionHierarchyDtoBuilder()
         return PositionHierarchyDto.builder().categories(categoryNodes).build();
     }
 }
