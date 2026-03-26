@@ -32,7 +32,7 @@ public class QualificationServiceImpl implements QualificationService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<EmployeeQualificationDto> getAllEmployeesWithQualifications() {
+    public List<EmployeeQualificationDto> getAllEmployeesWithStations() {
         List<User> users = userRepository.findAllActiveUsersWithDetails();
 
         return users.stream().map(user -> {
@@ -56,26 +56,27 @@ public class QualificationServiceImpl implements QualificationService {
 
     @Override
     @Transactional
-    public void updateUserQualifications(UUID userId, Set<Integer> stationIds) {
+    public void updateUserStations(UUID userId, Set<Integer> stationIds) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Uživatel nenalezen."));
 
         List<Station> stations = stationRepository.findAllById(stationIds);
 
-        // Přepíšeme starý Set novým a Hibernate automaticky provede úpravy v databázi!
+        // Hibernate se postará o vyčištění tabulky user_qualified_stations a vložení nových ID
         user.setQualifiedStations(new HashSet<>(stations));
         userRepository.save(user);
-        log.info("Kvalifikace (stanoviště) aktualizovány pro uživatele {}.", userId);
+        log.info("Přiřazená stanoviště byla aktualizována pro uživatele {}.", userId);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public boolean verifyUserQualificationForStation(UUID userId, Integer stationId) {
+    public boolean isUserQualifiedForStation(UUID userId, Integer stationId) {
         Station station = stationRepository.findById(stationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Stanoviště nenalezeno."));
 
+        // Pokud stanoviště nevyžaduje kvalifikaci, může tam kdokoliv
         if (Boolean.FALSE.equals(station.getNeedsQualification())) {
-            return true; // Na toto stanoviště může kdokoliv
+            return true;
         }
 
         User user = userRepository.findById(userId)

@@ -10,6 +10,7 @@ import com.companyapp.backend.services.OperatingHoursService;
 import com.companyapp.backend.services.dto.request.PauseRuleDto;
 import com.companyapp.backend.services.dto.request.SeasonalRegimeDto;
 import com.companyapp.backend.services.dto.request.StandardHoursDto;
+import com.companyapp.backend.services.dto.response.DailyHoursDto;
 import com.companyapp.backend.services.dto.response.OperatingHoursDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,13 +33,50 @@ public class OperatingHoursServiceImpl implements OperatingHoursService {
     private final PauseRuleRepository pauseRuleRepo;
 
     @Override
+    @Transactional(readOnly = true)
     public Object getOperatingHoursForDate(LocalDate date) {
-        return OperatingHoursDto.builder()
-                .openTime(LocalTime.of(8, 0))
-                .closeTime(LocalTime.of(20, 0))
-                .isSeasonalRegime(false)
-                .regimeName("Běžný provoz")
-                .build();
+        // 1. Zkusíme najít sezónu
+        List<SeasonalRegime> seasons = seasonalRepo.findActiveRegimesForDate(date);
+
+        if (!seasons.isEmpty()) {
+            SeasonalRegime season = seasons.get(0);
+            return DailyHoursDto.builder()
+                    .date(date)
+                    // Pokud v sezóně nějaký čas chybí, dosadíme bezpečnou záchranu
+                    .dopoStart(season.getDopoStart() != null ? season.getDopoStart().toString() : "08:00")
+                    .dopoEnd(season.getDopoEnd() != null ? season.getDopoEnd().toString() : "12:00")
+                    .odpoStart(season.getOdpoStart() != null ? season.getOdpoStart().toString() : "12:30")
+                    .odpoEnd(season.getOdpoEnd() != null ? season.getOdpoEnd().toString() : "16:00")
+                    .isSeasonal(true)
+                    .build();
+        }
+
+        // 2. Pokud není sezóna, bereme standardní dobu (pokud neexistuje, vytvoříme prázdnou s defaulty)
+        StandardOperatingHours std = standardHoursRepo.findAll().stream().findFirst().orElse(new StandardOperatingHours());
+        boolean isWeekend = (date.getDayOfWeek() == java.time.DayOfWeek.SATURDAY || date.getDayOfWeek() == java.time.DayOfWeek.SUNDAY);
+
+        // 3. Víkend s odlišnou otevíračkou
+        if (isWeekend && !Boolean.TRUE.equals(std.getWeekendSame())) {
+            return DailyHoursDto.builder()
+                    .date(date)
+                    .dopoStart(std.getWeekendDopoStart() != null ? std.getWeekendDopoStart().toString() : "08:00")
+                    .dopoEnd(std.getWeekendDopoEnd() != null ? std.getWeekendDopoEnd().toString() : "12:00")
+                    .odpoStart(std.getWeekendOdpoStart() != null ? std.getWeekendOdpoStart().toString() : "12:30")
+                    .odpoEnd(std.getWeekendOdpoEnd() != null ? std.getWeekendOdpoEnd().toString() : "16:00")
+                    .isSeasonal(false)
+                    .build();
+        }
+        // 4. Víkend shodný s týdnem NEBO všední den
+        else {
+            return DailyHoursDto.builder()
+                    .date(date)
+                    .dopoStart(std.getWeekDopoStart() != null ? std.getWeekDopoStart().toString() : "08:00")
+                    .dopoEnd(std.getWeekDopoEnd() != null ? std.getWeekDopoEnd().toString() : "12:00")
+                    .odpoStart(std.getWeekOdpoStart() != null ? std.getWeekOdpoStart().toString() : "12:30")
+                    .odpoEnd(std.getWeekOdpoEnd() != null ? std.getWeekOdpoEnd().toString() : "16:00")
+                    .isSeasonal(false)
+                    .build();
+        }
     }
 
     // =====================================

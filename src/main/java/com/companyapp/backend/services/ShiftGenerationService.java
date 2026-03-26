@@ -1,11 +1,12 @@
+// src/main/java/com/companyapp/backend/services/ShiftGenerationService.java
 package com.companyapp.backend.services;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.UUID;
 
 public interface ShiftGenerationService {
-    // Návratový typ by byl List<ShiftDto>, pro stručnost vynecháno
-    List<Object> generateShiftsFromTemplate(LocalDate startDate, LocalDate endDate, UUID templateId);
+    // ZMĚNĚNO z UUID na Integer u templateId
+    List<Object> generateShiftsFromTemplate(LocalDate startDate, LocalDate endDate, Integer templateId);
     void copyWeekSchedule(LocalDate sourceWeekStart, LocalDate targetWeekStart);
+    void clearWeekSchedule(LocalDate startDate, LocalDate endDate);
 }

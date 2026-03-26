@@ -20,14 +20,16 @@ public class QualificationController {
 
     @GetMapping("/employees")
     public ResponseEntity<List<EmployeeQualificationDto>> getAllEmployeesWithQualifications() {
-        return ResponseEntity.ok(qualificationService.getAllEmployeesWithQualifications());
+        // Změněno na: getAllEmployeesWithStations()
+        return ResponseEntity.ok(qualificationService.getAllEmployeesWithStations());
     }
 
     @PutMapping("/users/{userId}")
     public ResponseEntity<Void> updateUserQualifications(
             @PathVariable UUID userId,
             @Valid @RequestBody UpdateQualificationsRequestDto request) {
-        qualificationService.updateUserQualifications(userId, request.getQualificationIds());
+        // Změněno na: updateUserStations()
+        qualificationService.updateUserStations(userId, request.getQualificationIds());
         return ResponseEntity.ok().build();
     }
 
@@ -35,6 +37,7 @@ public class QualificationController {
     public ResponseEntity<Boolean> verifyUserQualificationForStation(
             @PathVariable UUID userId,
             @PathVariable Integer stationId) {
-        return ResponseEntity.ok(qualificationService.verifyUserQualificationForStation(userId, stationId));
+        // Změněno na: isUserQualifiedForStation()
+        return ResponseEntity.ok(qualificationService.isUserQualifiedForStation(userId, stationId));
     }
 }

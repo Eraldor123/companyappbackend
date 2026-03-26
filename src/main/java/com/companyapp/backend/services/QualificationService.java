@@ -6,7 +6,7 @@ import java.util.Set;
 import java.util.UUID;
 
 public interface QualificationService {
-    List<EmployeeQualificationDto> getAllEmployeesWithQualifications();
-    void updateUserQualifications(UUID userId, Set<Integer> stationIds);
-    boolean verifyUserQualificationForStation(UUID userId, Integer stationId);
+    List<EmployeeQualificationDto> getAllEmployeesWithStations();
+    void updateUserStations(UUID userId, Set<Integer> stationIds);
+    boolean isUserQualifiedForStation(UUID userId, Integer stationId);
 }

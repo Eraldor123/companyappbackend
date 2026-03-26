@@ -49,13 +49,12 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
             throw new AvailabilityNotProvidedException("Zaměstnanec nemá nahlášenou dostupnost.");
         }
 
-        // 4. Kvalifikace
-        if (!qualificationService.verifyUserQualificationForStation(userId, shift.getStation().getId())) {
-            throw new MissingQualificationException("Chybí potřebná kvalifikace.");
+        // --- 4. OPRAVENO: Nový název metody v QualificationService ---
+        if (!qualificationService.isUserQualifiedForStation(userId, shift.getStation().getId())) {
+            throw new MissingQualificationException("Chybí potřebná kvalifikace pro toto stanoviště.");
         }
 
-        // 5. Overlap Check - Check-then-Act vzor
-        // JPQL COUNT vrací long, proto používáme long overlappingCount
+        // 5. Overlap Check
         long overlappingCount = shiftAssignmentRepository.countOverlappingShifts(
                 userId,
                 shift.getStartTime().toLocalDateTime(),
@@ -69,7 +68,7 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
         // 6. Act - Uložení
         ShiftAssignment assignment = new ShiftAssignment();
         assignment.setShift(shift);
-        assignment.setEmployee(user); // Používáme opravený setter setEmployee
+        assignment.setEmployee(user);
         assignment.setStartTime(shift.getStartTime().toLocalDateTime());
         assignment.setEndTime(shift.getEndTime().toLocalDateTime());
 
@@ -80,15 +79,14 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
     }
 
     private ShiftAssignmentDto mapToDto(ShiftAssignment assignment) {
-        // Pro převod z LocalDateTime (v entitě) na ZonedDateTime (v DTO) použijeme.atZone()
         return ShiftAssignmentDto.builder()
                 .id(assignment.getId())
                 .shiftId(assignment.getShift().getId())
                 .userId(assignment.getEmployee().getId())
                 .userName(assignment.getEmployee().getFirstName() + " " + assignment.getEmployee().getLastName())
                 .stationName(assignment.getShift().getStation().getName())
-                .startTime(assignment.getStartTime().atZone(java.time.ZoneId.of("UTC"))) // Opraveno na ZonedDateTime
-                .endTime(assignment.getEndTime().atZone(java.time.ZoneId.of("UTC")))     // Opraveno na ZonedDateTime
+                .startTime(assignment.getStartTime().atZone(java.time.ZoneId.of("UTC")))
+                .endTime(assignment.getEndTime().atZone(java.time.ZoneId.of("UTC")))
                 .build();
     }
 
@@ -100,8 +98,5 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
             throw new ResourceNotFoundException("Přiřazení směny neexistuje.");
         }
         shiftAssignmentRepository.deleteById(id);
-
-        // V praxi bys zde možná chtěl i změnit Availability uživatele zpět na AVAILABLE pro daný den,
-        // záleží na tvých firemních pravidlech.
     }
 }

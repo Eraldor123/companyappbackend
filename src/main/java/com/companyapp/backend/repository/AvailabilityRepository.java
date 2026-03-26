@@ -53,4 +53,11 @@ public interface AvailabilityRepository extends JpaRepository<Availability, Long
             @Param("userId") UUID userId,
             @Param("date") LocalDate date
     );
+
+    // Najde všechny dostupné lidi pro daný týden
+    @Query("SELECT a FROM Availability a WHERE a.availableDate BETWEEN :startDate AND :endDate")
+    List<Availability> findByDateRange(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
 }

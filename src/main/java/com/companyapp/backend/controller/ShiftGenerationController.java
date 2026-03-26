@@ -1,3 +1,4 @@
+// src/main/java/com/companyapp/backend/controller/ShiftGenerationController.java
 package com.companyapp.backend.controller;
 
 import com.companyapp.backend.services.ShiftGenerationService;
@@ -8,9 +9,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.format.annotation.DateTimeFormat;
 
+import java.time.LocalDate;
 import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/shift-generation")
@@ -22,12 +24,12 @@ public class ShiftGenerationController {
     @PostMapping("/from-template")
     public ResponseEntity<List<Object>> generateShiftsFromTemplate(
             @Valid @RequestBody ShiftGenerationRequestDto request) {
-        // V parametrech očekáváme UUID pro templateId podle interface, ale v DTO jsme měli Integer.
-        // Zde předpokládám konverzi nebo sjednocení typů v backendu.
+
+        // OPRAVENO: Předáváme rovnou Integer bez UUID převodu
         List<Object> generatedShifts = shiftGenerationService.generateShiftsFromTemplate(
                 request.getStartDate(),
                 request.getEndDate(),
-                UUID.fromString(request.getTemplateId().toString()) // Zástupná konverze
+                request.getTemplateId()
         );
         return new ResponseEntity<>(generatedShifts, HttpStatus.CREATED);
     }
@@ -40,5 +42,16 @@ public class ShiftGenerationController {
                 request.getTargetWeekStart()
         );
         return ResponseEntity.ok().build();
+    }
+
+
+    // Přidej tuto metodu do ShiftGenerationController
+    @DeleteMapping("/clear-week")
+    public ResponseEntity<Void> clearWeekSchedule(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+
+        shiftGenerationService.clearWeekSchedule(startDate, endDate);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -30,5 +31,19 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
             @Param("userId") UUID userId,
             @Param("windowStart") java.time.LocalDateTime windowStart,
             @Param("windowEnd") java.time.LocalDateTime windowEnd
+    );
+
+    @Query("SELECT sa FROM ShiftAssignment sa WHERE sa.shift.shiftDate BETWEEN :start AND :end")
+    java.util.List<ShiftAssignment> findByShiftDateBetween(
+            @Param("start") java.time.LocalDate start,
+            @Param("end") java.time.LocalDate end
+    );
+
+    // Rychle najde všechny směny zadaných lidí v daném měsíci (pro výpočet statistik)
+    @Query("SELECT sa FROM ShiftAssignment sa WHERE sa.employee.id IN :userIds AND sa.shift.shiftDate BETWEEN :start AND :end")
+    java.util.List<ShiftAssignment> findAssignmentsForUsersInDateRange(
+            @Param("userIds") java.util.List<UUID> userIds,
+            @Param("start") LocalDate start,
+            @Param("end") LocalDate end
     );
 }

@@ -1,8 +1,11 @@
 package com.companyapp.backend.services.impl;
 
+import com.companyapp.backend.entity.Contract;
 import com.companyapp.backend.entity.User;
 import com.companyapp.backend.entity.UserProfile;
 import com.companyapp.backend.enums.AccessLevel;
+import com.companyapp.backend.enums.ContractType;
+import com.companyapp.backend.repository.ContractRepository;
 import com.companyapp.backend.repository.UserRepository;
 import com.companyapp.backend.repository.UserProfileRepository;
 import com.companyapp.backend.services.UserService;
@@ -16,6 +19,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Slf4j
@@ -25,7 +30,8 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
-    private final PasswordEncoder passwordEncoder; // Pro bezpečné uložení hesel/PINů
+    private final ContractRepository contractRepository; // PŘIDÁNO: Repozitář pro smlouvy
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     @Transactional
@@ -40,20 +46,19 @@ public class UserServiceImpl implements UserService {
         // 2. Vytvoření doménové entity User
         User user = new User();
         user.setEmail(request.getEmail());
-        user.setRoles(request.getAccessLevels()); // ZMĚNA: Používáme množné číslo
+        user.setRoles(request.getAccessLevels());
         user.setActive(true);
 
         String generatedPin;
         String hashedPin;
         do {
-            // ZMĚNA: Ptáme se kolekce, zda obsahuje roli TERMINAL
             generatedPin = user.getRoles().contains(AccessLevel.TERMINAL) ? "0000" : String.format("%04d", new java.util.Random().nextInt(10000));
             hashedPin = passwordEncoder.encode(generatedPin);
         } while (userRepository.findByPinAndIsActiveTrue(hashedPin).isPresent());
 
         log.info("Vygenerován UNIKÁTNÍ PIN pro uživatele (odeslat na email): {}", generatedPin);
         user.setPin(hashedPin);
-        // ------------------------------
+
         // 3. Vytvoření přidruženého profilu
         UserProfile profile = new UserProfile();
         profile.setFirstName(request.getFirstName());
@@ -61,13 +66,27 @@ public class UserServiceImpl implements UserService {
         profile.setPhone(request.getPhone());
         profile.setUser(user);
 
-        // Zde by následovala logika pro vytvoření entity Contract (DPP, HPP, OSVC)
-        //...
+        // 4. Vytvoření entity Contract (Smlouva)
+        Contract contract = new Contract();
+        contract.setUser(user);
+        contract.setType(request.getContractType());
+        contract.setHourlyWage(request.getHourlyWage());
+        contract.setMonthlyWage(request.getMonthlyWage());
 
+        // Převod Double (FTE z DTO) na BigDecimal (FTE v entitě)
+        if (request.getContractSize() != null) {
+            contract.setFte(BigDecimal.valueOf(request.getContractSize()));
+        }
+        if (contract.getType() == ContractType.OSVC)
+            contract.setCompanyIdNumber(request.getIco());
+        contract.setValidFrom(LocalDate.now()); // Smlouva platí od okamžiku registrace
+
+        // 5. Uložení všech entit do databáze
         userRepository.save(user);
         userProfileRepository.save(profile);
+        contractRepository.save(contract); // Uložíme smlouvu
 
-        return mapToProfileDto(user, profile);
+        return mapToProfileDto(user, profile, contract);
     }
 
     @Override
@@ -86,7 +105,6 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Uživatel nenalezen."));
 
-        // Zde musí proběhnout anonymizace dat před smazáním (odpojení cizích klíčů z docházky)
         userRepository.delete(user);
         log.warn("Uživatel {} byl TVRDĚ smazán vč. přerušení relací.", userId);
     }
@@ -97,21 +115,25 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Uživatel nenalezen."));
 
-        // Entita User má vazbu OneToOne na UserProfile
         if (user.getUserProfile() == null) {
             throw new ResourceNotFoundException("Profil uživatele nenalezen.");
         }
 
-        return mapToProfileDto(user, user.getUserProfile());
+        // Najdeme aktivní smlouvu uživatele, abychom ji mohli zobrazit v profilu
+        Contract contract = contractRepository.findLatestContractByUserId(user.getId()).orElse(null);
+
+        return mapToProfileDto(user, user.getUserProfile(), contract);
     }
 
-    private UserProfileDto mapToProfileDto(User user, UserProfile profile) {
+    // PŘIDÁNO: Parametr Contract, aby se do DTO propisoval i typ smlouvy
+    private UserProfileDto mapToProfileDto(User user, UserProfile profile, Contract contract) {
         return UserProfileDto.builder()
                 .id(user.getId())
                 .firstName(profile.getFirstName())
                 .lastName(profile.getLastName())
                 .email(user.getEmail())
                 .isActive(user.isActive())
+                .contractType(contract != null && contract.getType() != null ? contract.getType().name() : "N/A")
                 .build();
     }
 }
