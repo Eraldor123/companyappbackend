@@ -62,12 +62,16 @@ public class SecurityConfig {
     }
 
     // Nastavení CORS (Povolení pro frontend, např. React na localhost:3000 nebo Vite na 5173)
+    // Nastavení CORS (Povolení pro frontend, např. React na localhost:3000 nebo Vite na 5173)
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+
+        // TADY JE OPRAVA: Místo vyjmenovávání konkrétních hlaviček povolíme všechny pomocí "*"
+        configuration.setAllowedHeaders(List.of("*"));
+
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

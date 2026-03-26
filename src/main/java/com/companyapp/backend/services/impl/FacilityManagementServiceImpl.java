@@ -11,8 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.UUID;
-
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -23,7 +21,7 @@ public class FacilityManagementServiceImpl implements FacilityManagementService 
 
     @Override
     @Transactional
-    public void deactivateStation(UUID stationId) {
+    public void deactivateStation(Integer stationId) {
         Station station = stationRepository.findById(stationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Stanoviště nenalezeno."));
 
@@ -34,7 +32,7 @@ public class FacilityManagementServiceImpl implements FacilityManagementService 
 
     @Override
     @Transactional
-    public void deactivateMainCategory(UUID categoryId) {
+    public void deactivateMainCategory(Integer categoryId) {
         MainCategory category = mainCategoryRepository.findById(categoryId)
                 .orElseThrow(() -> new ResourceNotFoundException("Kategorie nenalezena."));
 
@@ -43,9 +41,9 @@ public class FacilityManagementServiceImpl implements FacilityManagementService 
         log.info("Kategorie {} byla deaktivována. Historická data zůstávají nedotčena.", category.getName());
     }
 
-    // Metoda navíc pro ukázku tvrdého smazání vyžadovaného UI (např. stránka 73 z návrhu)
+    // Metoda navíc pro ukázku tvrdého smazání
     @Transactional
-    public void hardDeleteStation(UUID stationId, String confirmationText) {
+    public void hardDeleteStation(Integer stationId, String confirmationText) {
         if (!"DELETE".equals(confirmationText)) {
             throw new IllegalArgumentException("Pro trvalé smazání musíte zadat text 'DELETE'.");
         }

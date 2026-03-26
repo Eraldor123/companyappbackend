@@ -10,9 +10,13 @@ public class CreateStationRequestDto {
     private Integer capacityLimit;
     private Boolean isActive;
     private Boolean needsQualification;
+
     @NotBlank(message = "Název stanoviště je povinný")
     private String name;
 
     @NotNull(message = "ID kategorie musí být vyplněno")
     private Integer categoryId;
+
+    // TATO ČÁST CHYBĚLA:
+    private Integer sortOrder;
 }

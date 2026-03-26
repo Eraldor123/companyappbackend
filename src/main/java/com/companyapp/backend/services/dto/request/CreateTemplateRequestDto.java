@@ -8,23 +8,23 @@ import lombok.Data;
 public class CreateTemplateRequestDto {
     @NotNull
     private Integer stationId;
-
     @NotBlank
     private String name;
 
-    @NotBlank
+    // ODEBRÁNO @NotBlank
     private String startTime;
-
-    @NotBlank
     private String endTime;
 
     private String startTime2;
-
     private String endTime2;
 
     @NotNull
     private Integer workersNeeded;
-
-    // --- PŘIDÁNO ---
     private Boolean isActive;
+    private Integer sortOrder;
+
+    // PŘIDÁNO:
+    private Boolean useOpeningHours;
+    private Boolean hasDopo;
+    private Boolean hasOdpo;
 }

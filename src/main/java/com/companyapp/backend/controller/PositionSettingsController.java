@@ -1,18 +1,20 @@
 package com.companyapp.backend.controller;
-import com.companyapp.backend.repository.ShiftTemplateRepository;
-import com.companyapp.backend.services.dto.request.CreateTemplateRequestDto;
-import com.companyapp.backend.entity.ShiftTemplate;
+
 import com.companyapp.backend.entity.MainCategory;
+import com.companyapp.backend.entity.ShiftTemplate;
 import com.companyapp.backend.entity.Station;
 import com.companyapp.backend.repository.MainCategoryRepository;
+import com.companyapp.backend.repository.ShiftTemplateRepository;
 import com.companyapp.backend.repository.StationRepository;
 import com.companyapp.backend.services.PositionSettingsService;
 import com.companyapp.backend.services.dto.request.CreateCategoryRequestDto;
 import com.companyapp.backend.services.dto.request.CreateStationRequestDto;
+import com.companyapp.backend.services.dto.request.CreateTemplateRequestDto;
 import com.companyapp.backend.services.dto.response.PositionHierarchyDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalTime;
@@ -26,11 +28,15 @@ public class PositionSettingsController {
     private final MainCategoryRepository categoryRepository;
     private final StationRepository stationRepository;
     private final ShiftTemplateRepository shiftTemplateRepository;
+
     @GetMapping("/hierarchy")
     public ResponseEntity<PositionHierarchyDto> getHierarchy() {
         return ResponseEntity.ok(positionSettingsService.getFullHierarchy());
     }
 
+    // ==========================================
+    // VYTVÁŘENÍ (POST)
+    // ==========================================
     @PostMapping("/categories")
     public ResponseEntity<?> createCategory(@Valid @RequestBody CreateCategoryRequestDto request) {
         MainCategory category = new MainCategory();
@@ -38,14 +44,12 @@ public class PositionSettingsController {
         category.setHexColor(request.getHexColor());
         category.setSortOrder(request.getSortOrder() != null ? request.getSortOrder() : 1);
         category.setIsActive(request.getIsActive() != null ? request.getIsActive() : true);
-
         categoryRepository.save(category);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/stations")
     public ResponseEntity<?> createStation(@Valid @RequestBody CreateStationRequestDto request) {
-        // Najdeme kategorii v DB podle ID z requestu
         MainCategory category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new RuntimeException("Kategorie nenalezena"));
 
@@ -53,14 +57,14 @@ public class PositionSettingsController {
         station.setName(request.getName());
         station.setCategory(category);
         station.setCapacityLimit(request.getCapacityLimit() != null ? request.getCapacityLimit() : 1);
-
-        // Důležité: Ukládáme true/false přímo z requestu
         station.setIsActive(request.getIsActive() != null ? request.getIsActive() : true);
         station.setNeedsQualification(request.getNeedsQualification() != null ? request.getNeedsQualification() : false);
+        station.setSortOrder(request.getSortOrder() != null ? request.getSortOrder() : 1);
 
         stationRepository.save(station);
         return ResponseEntity.ok().build();
     }
+
     @PostMapping("/templates")
     public ResponseEntity<?> createTemplate(@Valid @RequestBody CreateTemplateRequestDto request) {
         Station station = stationRepository.findById(request.getStationId())
@@ -69,21 +73,28 @@ public class PositionSettingsController {
         ShiftTemplate template = new ShiftTemplate();
         template.setStation(station);
         template.setName(request.getName());
-        template.setStartTime(LocalTime.parse(request.getStartTime()));
-        template.setEndTime(LocalTime.parse(request.getEndTime()));
         template.setWorkersNeeded(request.getWorkersNeeded());
+        template.setSortOrder(request.getSortOrder() != null ? request.getSortOrder() : 1);
 
-        // --- PŘIDÁNO: Pokud přijde i druhá část směny, uložíme ji ---
-        if (request.getStartTime2() != null && !request.getStartTime2().isEmpty()) {
-            template.setStartTime2(LocalTime.parse(request.getStartTime2()));
+        // --- NOVÉ BOLEANY PRO OTEVÍRACÍ DOBU ---
+        template.setUseOpeningHours(request.getUseOpeningHours() != null ? request.getUseOpeningHours() : false);
+        template.setHasDopo(request.getHasDopo() != null ? request.getHasDopo() : true);
+        template.setHasOdpo(request.getHasOdpo() != null ? request.getHasOdpo() : false);
+
+        // --- OŠETŘENÍ PRÁZDNÝCH ČASŮ ---
+        if (request.getStartTime() != null && !request.getStartTime().isEmpty() &&
+                request.getEndTime() != null && !request.getEndTime().isEmpty()) {
+            template.setStartTime(LocalTime.parse(request.getStartTime()));
+            template.setEndTime(LocalTime.parse(request.getEndTime()));
         }
-        if (request.getEndTime2() != null && !request.getEndTime2().isEmpty()) {
+
+        if (request.getStartTime2() != null && !request.getStartTime2().isEmpty() &&
+                request.getEndTime2() != null && !request.getEndTime2().isEmpty()) {
+            template.setStartTime2(LocalTime.parse(request.getStartTime2()));
             template.setEndTime2(LocalTime.parse(request.getEndTime2()));
         }
 
-        // --- PŘIDÁNO: Uložení aktivního stavu ---
         template.setIsActive(request.getIsActive() != null ? request.getIsActive() : true);
-
         shiftTemplateRepository.save(template);
         return ResponseEntity.ok().build();
     }
@@ -91,18 +102,24 @@ public class PositionSettingsController {
     // ==========================================
     // EDITACE A MAZÁNÍ - KATEGORIE
     // ==========================================
+    @Transactional
     @PutMapping("/categories/{id}")
     public ResponseEntity<?> updateCategory(@PathVariable Integer id, @Valid @RequestBody CreateCategoryRequestDto request) {
-        MainCategory category = categoryRepository.findById(id).orElseThrow(() -> new RuntimeException("Kategorie nenalezena"));
+        MainCategory category = categoryRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Kategorie nenalezena"));
+
+        boolean wasActive = category.getIsActive() != null && category.getIsActive();
+        boolean willBeActive = request.getIsActive() != null ? request.getIsActive() : true;
+
         category.setName(request.getName());
         category.setHexColor(request.getHexColor());
-        category.setSortOrder(request.getSortOrder() != null ? request.getSortOrder() : 1);
 
-        boolean wasActive = category.getIsActive();
-        boolean willBeActive = request.getIsActive() != null ? request.getIsActive() : true;
+        if (request.getSortOrder() != null) {
+            category.setSortOrder(request.getSortOrder());
+        }
+
         category.setIsActive(willBeActive);
 
-        // KASKÁDOVÁ DEAKTIVACE: Pokud vypínáme kategorii, vypneme i podřazené prvky
         if (wasActive && !willBeActive) {
             java.util.List<Station> stations = stationRepository.findAll().stream()
                     .filter(s -> s.getCategory().getId().equals(id))
@@ -118,13 +135,13 @@ public class PositionSettingsController {
                 }
             }
         }
+
         categoryRepository.save(category);
         return ResponseEntity.ok().build();
     }
 
     @DeleteMapping("/categories/{id}")
     public ResponseEntity<?> deleteCategory(@PathVariable Integer id) {
-        // KASKÁDOVÉ SMAZÁNÍ: Nejdřív šablony, pak stanoviště, pak kategorie (Ochrana Foreign Key)
         java.util.List<Station> stations = stationRepository.findAll().stream()
                 .filter(s -> s.getCategory().getId().equals(id))
                 .collect(java.util.stream.Collectors.toList());
@@ -135,7 +152,6 @@ public class PositionSettingsController {
         }
         stationRepository.deleteAll(stations);
         categoryRepository.deleteById(id);
-
         return ResponseEntity.noContent().build();
     }
 
@@ -148,12 +164,12 @@ public class PositionSettingsController {
         station.setName(request.getName());
         station.setCapacityLimit(request.getCapacityLimit() != null ? request.getCapacityLimit() : 1);
         station.setNeedsQualification(request.getNeedsQualification() != null ? request.getNeedsQualification() : false);
+        station.setSortOrder(request.getSortOrder() != null ? request.getSortOrder() : station.getSortOrder());
 
         boolean wasActive = station.getIsActive();
         boolean willBeActive = request.getIsActive() != null ? request.getIsActive() : true;
         station.setIsActive(willBeActive);
 
-        // KASKÁDOVÁ DEAKTIVACE: Pokud vypínáme stanoviště, vypneme i jeho šablony
         if (wasActive && !willBeActive) {
             java.util.List<ShiftTemplate> templates = shiftTemplateRepository.findByStationId(id);
             for (ShiftTemplate t : templates) {
@@ -167,7 +183,6 @@ public class PositionSettingsController {
 
     @DeleteMapping("/stations/{id}")
     public ResponseEntity<?> deleteStation(@PathVariable Integer id) {
-        // KASKÁDOVÉ SMAZÁNÍ: Nejdřív šablony, pak stanoviště
         java.util.List<ShiftTemplate> templates = shiftTemplateRepository.findByStationId(id);
         shiftTemplateRepository.deleteAll(templates);
         stationRepository.deleteById(id);
@@ -183,17 +198,26 @@ public class PositionSettingsController {
         template.setName(request.getName());
         template.setWorkersNeeded(request.getWorkersNeeded());
         template.setIsActive(request.getIsActive() != null ? request.getIsActive() : true);
+        template.setSortOrder(request.getSortOrder() != null ? request.getSortOrder() : template.getSortOrder());
 
-        template.setStartTime(request.getStartTime() != null ? LocalTime.parse(request.getStartTime()) : null);
-        template.setEndTime(request.getEndTime() != null ? LocalTime.parse(request.getEndTime()) : null);
+        // --- NOVÉ BOLEANY PRO OTEVÍRACÍ DOBU ---
+        template.setUseOpeningHours(request.getUseOpeningHours() != null ? request.getUseOpeningHours() : false);
+        template.setHasDopo(request.getHasDopo() != null ? request.getHasDopo() : true);
+        template.setHasOdpo(request.getHasOdpo() != null ? request.getHasOdpo() : false);
 
-        if (request.getStartTime2() != null && !request.getStartTime2().isEmpty()) {
+        // --- OŠETŘENÍ PRÁZDNÝCH ČASŮ ---
+        template.setStartTime(request.getStartTime() != null && !request.getStartTime().isEmpty() ? LocalTime.parse(request.getStartTime()) : null);
+        template.setEndTime(request.getEndTime() != null && !request.getEndTime().isEmpty() ? LocalTime.parse(request.getEndTime()) : null);
+
+        if (request.getStartTime2() != null && !request.getStartTime2().isEmpty() &&
+                request.getEndTime2() != null && !request.getEndTime2().isEmpty()) {
             template.setStartTime2(LocalTime.parse(request.getStartTime2()));
             template.setEndTime2(LocalTime.parse(request.getEndTime2()));
         } else {
             template.setStartTime2(null);
             template.setEndTime2(null);
         }
+
         shiftTemplateRepository.save(template);
         return ResponseEntity.ok().build();
     }

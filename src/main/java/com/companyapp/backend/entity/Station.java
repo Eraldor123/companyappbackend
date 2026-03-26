@@ -45,6 +45,8 @@ public class Station {
      */
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
+    @Column(name = "sort_order")
+    private Integer sortOrder = 1;
 
     @Override
     public boolean equals(Object o) {
@@ -61,5 +63,8 @@ public class Station {
 
     public void setActive(boolean b) {
         this.isActive = b;
+
     }
+
+
 }
