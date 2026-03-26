@@ -46,4 +46,5 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
             @Param("start") LocalDate start,
             @Param("end") LocalDate end
     );
+    void deleteByShiftIdAndEmployeeId(UUID shiftId, UUID userId);
 }
