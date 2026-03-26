@@ -24,9 +24,6 @@ public class Qualification {
     @Column(name = "name", nullable = false)
     private String name;
 
-    /**
-     * Oboustranná vazba na UserQualification, která umožňuje získat všechny uživatele, kteří mají tuto kvalifikaci.
-     */
     @OneToMany(mappedBy = "qualification", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<UserQualification> userQualifications = new HashSet<>();
 

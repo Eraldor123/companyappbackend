@@ -6,5 +6,4 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface QualificationRepository extends JpaRepository<Qualification, Integer> {
-    // Zatím nepotřebujeme žádné speciální metody, stačí nám základní CRUD z JpaRepository
 }

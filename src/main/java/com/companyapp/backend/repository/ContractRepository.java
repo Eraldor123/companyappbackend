@@ -19,4 +19,7 @@ public interface ContractRepository extends JpaRepository<Contract, UUID> {
     List<Contract> findActiveContractsForUserAtDate(
             @Param("userId") UUID userId,
             @Param("targetDate") LocalDate targetDate);
+
+    @Query("SELECT c FROM Contract c WHERE c.user.id = :userId ORDER BY c.validFrom DESC LIMIT 1")
+    java.util.Optional<Contract> findLatestContractByUserId(@Param("userId") UUID userId);
 }
