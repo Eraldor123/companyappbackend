@@ -64,6 +64,9 @@ public class Shift {
     @Column(name = "required_capacity", nullable = false)
     private Integer requiredCapacity;
 
+    @Column(name = "description", length = 255)
+    private String description;
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

@@ -2,11 +2,15 @@ package com.companyapp.backend.services.impl;
 
 import com.companyapp.backend.entity.Shift;
 import com.companyapp.backend.entity.ShiftTemplate;
+import com.companyapp.backend.entity.Station;
+import com.companyapp.backend.repository.ShiftAssignmentRepository;
 import com.companyapp.backend.repository.ShiftRepository;
 import com.companyapp.backend.repository.ShiftTemplateRepository;
-import com.companyapp.backend.services.OperatingHoursService; // NOVÉ
+import com.companyapp.backend.repository.StationRepository;
+import com.companyapp.backend.services.OperatingHoursService;
 import com.companyapp.backend.services.ShiftGenerationService;
-import com.companyapp.backend.services.dto.response.DailyHoursDto; // NOVÉ
+import com.companyapp.backend.services.dto.request.CreateCustomShiftRequestDto;
+import com.companyapp.backend.services.dto.response.DailyHoursDto;
 import com.companyapp.backend.services.dto.response.ShiftDto;
 import com.companyapp.backend.services.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.LocalTime; // NOVÉ
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
@@ -29,7 +33,9 @@ public class ShiftGenerationServiceImpl implements ShiftGenerationService {
 
     private final ShiftRepository shiftRepository;
     private final ShiftTemplateRepository shiftTemplateRepository;
-    private final OperatingHoursService operatingHoursService; // PŘIDÁNO: Abychom znali otevírací dobu areálu
+    private final OperatingHoursService operatingHoursService;
+    private final ShiftAssignmentRepository shiftAssignmentRepository;
+    private final StationRepository stationRepository;
 
     @Override
     @Transactional
@@ -52,17 +58,17 @@ public class ShiftGenerationServiceImpl implements ShiftGenerationService {
                 if (Boolean.TRUE.equals(template.getHasDopo()) && dailyHours.getDopoStart() != null && dailyHours.getDopoEnd() != null) {
                     newShifts.add(createShiftObj(template, currentDate, LocalTime.parse(dailyHours.getDopoStart()), LocalTime.parse(dailyHours.getDopoEnd())));
                 }
+
                 // Má odpolední část?
                 if (Boolean.TRUE.equals(template.getHasOdpo()) && dailyHours.getOdpoStart() != null && dailyHours.getOdpoEnd() != null) {
                     newShifts.add(createShiftObj(template, currentDate, LocalTime.parse(dailyHours.getOdpoStart()), LocalTime.parse(dailyHours.getOdpoEnd())));
                 }
             }
-            // 2. SCÉNÁŘ: Pevně dané časy v šabloně (klasická nebo dělená)
+            // 2. SCÉNÁŘ: Pevně dané časy v šabloně
             else {
                 if (template.getStartTime() != null && template.getEndTime() != null) {
                     newShifts.add(createShiftObj(template, currentDate, template.getStartTime(), template.getEndTime()));
                 }
-                // Dělená směna (odpolední část - např. 14:00 - 18:00)
                 if (template.getStartTime2() != null && template.getEndTime2() != null) {
                     newShifts.add(createShiftObj(template, currentDate, template.getStartTime2(), template.getEndTime2()));
                 }
@@ -85,7 +91,6 @@ public class ShiftGenerationServiceImpl implements ShiftGenerationService {
                 .build()).collect(Collectors.toList());
     }
 
-    // Pomocná metoda, aby byl kód čistý a neopakovali jsme to samé dokola
     private Shift createShiftObj(ShiftTemplate template, LocalDate date, LocalTime start, LocalTime end) {
         Shift shift = new Shift();
         shift.setStation(template.getStation());
@@ -95,7 +100,6 @@ public class ShiftGenerationServiceImpl implements ShiftGenerationService {
         ZonedDateTime startZoned = date.atTime(start).atZone(ZoneId.of("UTC"));
         ZonedDateTime endZoned = date.atTime(end).atZone(ZoneId.of("UTC"));
 
-        // Ošetření noční směny (konec je až další den ráno)
         if (endZoned.isBefore(startZoned)) {
             endZoned = endZoned.plusDays(1);
         }
@@ -134,23 +138,86 @@ public class ShiftGenerationServiceImpl implements ShiftGenerationService {
         log.info("Úspěšně zkopírováno {} směn do nového týdne.", newShifts.size());
     }
 
-    // 1. Přidej nahoru k ostatním repozitářům (pod shiftTemplateRepository)
-    private final com.companyapp.backend.repository.ShiftAssignmentRepository shiftAssignmentRepository;
-
-    // 2. Přidej samotnou metodu kamkoliv do třídy:
     @Override
     @Transactional
     public void clearWeekSchedule(LocalDate startDate, LocalDate endDate) {
         log.warn("Mažu všechny směny a přiřazení od {} do {}", startDate, endDate);
 
-        // Nejprve musíme smazat přiřazení lidí na směny (kvůli vazbám v DB)
         var assignments = shiftAssignmentRepository.findByShiftDateBetween(startDate, endDate);
         shiftAssignmentRepository.deleteAll(assignments);
 
-        // Pak smažeme samotné směny
         var shifts = shiftRepository.findByShiftDateBetween(startDate, endDate);
         shiftRepository.deleteAll(shifts);
 
         log.info("Smazáno {} přiřazení a {} směn.", assignments.size(), shifts.size());
+    }
+
+    @Override
+    @Transactional
+    public void generateCustomShifts(CreateCustomShiftRequestDto request) {
+        log.info("Generuji vlastní směnu pro stanoviště {} od {} do {}", request.getStationId(), request.getStartDate(), request.getEndDate());
+
+        Station station = stationRepository.findById(request.getStationId())
+                .orElseThrow(() -> new ResourceNotFoundException("Stanoviště nenalezeno."));
+
+        List<Shift> newShifts = new ArrayList<>();
+        LocalDate currentDate = request.getStartDate();
+
+        while (!currentDate.isAfter(request.getEndDate())) {
+
+            // SCÉNÁŘ 1: Řídí se podle otevírací doby (dopo/odpo)
+            if (Boolean.TRUE.equals(request.getUseOpeningHours())) {
+                DailyHoursDto dailyHours = (DailyHoursDto) operatingHoursService.getOperatingHoursForDate(currentDate);
+
+                if (Boolean.TRUE.equals(request.getHasDopo()) && dailyHours.getDopoStart() != null && dailyHours.getDopoEnd() != null) {
+                    // OPRAVA: Přidán parametr request.getDescription()
+                    Shift s = createCustomShiftObj(station, currentDate, LocalTime.parse(dailyHours.getDopoStart()), LocalTime.parse(dailyHours.getDopoEnd()), request.getRequiredCapacity(), request.getDescription());
+                    newShifts.add(s);
+                }
+                if (Boolean.TRUE.equals(request.getHasOdpo()) && dailyHours.getOdpoStart() != null && dailyHours.getOdpoEnd() != null) {
+                    // OPRAVA: Přidán parametr request.getDescription()
+                    Shift s = createCustomShiftObj(station, currentDate, LocalTime.parse(dailyHours.getOdpoStart()), LocalTime.parse(dailyHours.getOdpoEnd()), request.getRequiredCapacity(), request.getDescription());
+                    newShifts.add(s);
+                }
+            }
+            // SCÉNÁŘ 2: Máme zadán přesný čas natvrdo (původní chování)
+            else if (request.getStartTime() != null && request.getEndTime() != null) {
+                LocalTime start = LocalTime.parse(request.getStartTime());
+                LocalTime end = LocalTime.parse(request.getEndTime());
+                // OPRAVA: Přidán parametr request.getDescription()
+                Shift s = createCustomShiftObj(station, currentDate, start, end, request.getRequiredCapacity(), request.getDescription());
+                newShifts.add(s);
+            }
+
+            currentDate = currentDate.plusDays(1);
+        }
+
+        if (newShifts.isEmpty()) {
+            log.warn("Nebyly vygenerovány žádné vlastní směny. Zkontrolujte zadání.");
+        } else {
+            shiftRepository.saveAll(newShifts);
+            log.info("Vygenerováno {} vlastních směn.", newShifts.size());
+        }
+    }
+
+    // Pomocná metoda pro vlastní směny (aby to bylo čisté)
+    private Shift createCustomShiftObj(Station station, LocalDate date, LocalTime start, LocalTime end, Integer capacity, String description) {
+        Shift shift = new Shift();
+        shift.setStation(station);
+        shift.setTemplate(null);
+        shift.setShiftDate(date);
+        shift.setDescription(description); // <--- TADY SE ULOŽÍ POPISEK
+
+        ZonedDateTime startZoned = date.atTime(start).atZone(ZoneId.of("UTC"));
+        ZonedDateTime endZoned = date.atTime(end).atZone(ZoneId.of("UTC"));
+
+        if (endZoned.isBefore(startZoned)) {
+            endZoned = endZoned.plusDays(1);
+        }
+
+        shift.setStartTime(startZoned);
+        shift.setEndTime(endZoned);
+        shift.setRequiredCapacity(capacity);
+        return shift;
     }
 }

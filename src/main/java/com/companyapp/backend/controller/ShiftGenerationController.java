@@ -54,4 +54,9 @@ public class ShiftGenerationController {
         shiftGenerationService.clearWeekSchedule(startDate, endDate);
         return ResponseEntity.noContent().build();
     }
+    @PostMapping("/custom")
+    public ResponseEntity<Void> generateCustomShifts(@Valid @RequestBody com.companyapp.backend.services.dto.request.CreateCustomShiftRequestDto request) {
+        shiftGenerationService.generateCustomShifts(request);
+        return ResponseEntity.ok().build();
+    }
 }

@@ -6,4 +6,6 @@ import java.util.UUID;
 
 public interface ShiftService {
     ShiftDto updateShift(UUID id, ShiftUpdateRequest request);
+    void splitShift(UUID shiftId);
+    void deleteShift(UUID id);
 }

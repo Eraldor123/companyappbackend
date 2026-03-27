@@ -72,6 +72,7 @@ public class ScheduleController {
                 .startTime(s.getStartTime().toString())
                 .endTime(s.getEndTime().toString())
                 .requiredCapacity(s.getRequiredCapacity())
+                .description(s.getDescription()) // <--- PŘIDÁNO: Tady se propisuje popisek na frontend!
                 .assignedUsers(assignmentsByShift.getOrDefault(s.getId(), new ArrayList<>()))
                 .build()
         ).collect(Collectors.toList());

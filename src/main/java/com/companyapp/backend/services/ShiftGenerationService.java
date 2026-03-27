@@ -9,4 +9,5 @@ public interface ShiftGenerationService {
     List<Object> generateShiftsFromTemplate(LocalDate startDate, LocalDate endDate, Integer templateId);
     void copyWeekSchedule(LocalDate sourceWeekStart, LocalDate targetWeekStart);
     void clearWeekSchedule(LocalDate startDate, LocalDate endDate);
+    void generateCustomShifts(com.companyapp.backend.services.dto.request.CreateCustomShiftRequestDto request);
 }

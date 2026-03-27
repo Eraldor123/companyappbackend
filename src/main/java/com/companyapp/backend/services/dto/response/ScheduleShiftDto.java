@@ -17,6 +17,7 @@ public class ScheduleShiftDto {
     private String startTime;
     private String endTime;
     private Integer requiredCapacity;
+    private String description;
 
     // Tady frontend uvidí, kdo už tam je.
     // Pokud size() < requiredCapacity -> vykreslí červenou

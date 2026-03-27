@@ -23,4 +23,14 @@ public class ShiftController {
             @RequestBody ShiftUpdateRequest updateRequest) {
         return ResponseEntity.ok(shiftService.updateShift(id, updateRequest));
     }
+    @PostMapping("/{id}/split")
+    public ResponseEntity<Void> splitShift(@PathVariable UUID id) {
+        shiftService.splitShift(id);
+        return ResponseEntity.ok().build();
+    }
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteShift(@PathVariable UUID id) {
+        shiftService.deleteShift(id);
+        return ResponseEntity.noContent().build();
+    }
 }
