@@ -4,6 +4,7 @@ import com.companyapp.backend.entity.MainCategory;
 import com.companyapp.backend.entity.Station;
 import com.companyapp.backend.repository.MainCategoryRepository;
 import com.companyapp.backend.repository.StationRepository;
+import com.companyapp.backend.services.AuditLogService; // PŘIDÁNO
 import com.companyapp.backend.services.FacilityManagementService;
 import com.companyapp.backend.services.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ public class FacilityManagementServiceImpl implements FacilityManagementService 
 
     private final StationRepository stationRepository;
     private final MainCategoryRepository mainCategoryRepository;
+    private final AuditLogService auditLogService; // PŘIDÁNO
 
     @Override
     @Transactional
@@ -28,6 +30,14 @@ public class FacilityManagementServiceImpl implements FacilityManagementService 
         station.setActive(false);
         stationRepository.save(station);
         log.info("Stanoviště {} bylo bezpečně deaktivováno.", station.getName());
+
+        // ZÁZNAM DO AUDITU
+        auditLogService.logAction(
+                "DEACTIVATE_STATION",
+                "Station",
+                stationId.toString(),
+                "Stanoviště '" + station.getName() + "' (ID: " + stationId + ") bylo deaktivováno."
+        );
     }
 
     @Override
@@ -39,9 +49,16 @@ public class FacilityManagementServiceImpl implements FacilityManagementService 
         category.setActive(false);
         mainCategoryRepository.save(category);
         log.info("Kategorie {} byla deaktivována. Historická data zůstávají nedotčena.", category.getName());
+
+        // ZÁZNAM DO AUDITU
+        auditLogService.logAction(
+                "DEACTIVATE_CATEGORY",
+                "MainCategory",
+                categoryId.toString(),
+                "Hlavní kategorie '" + category.getName() + "' (ID: " + categoryId + ") byla deaktivována."
+        );
     }
 
-    // Metoda navíc pro ukázku tvrdého smazání
     @Transactional
     public void hardDeleteStation(Integer stationId, String confirmationText) {
         if (!"DELETE".equals(confirmationText)) {
@@ -51,7 +68,16 @@ public class FacilityManagementServiceImpl implements FacilityManagementService 
         Station station = stationRepository.findById(stationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Stanoviště nenalezeno."));
 
+        String stationName = station.getName();
         stationRepository.delete(station);
-        log.warn("Stanoviště {} bylo TRVALE smazáno vč. kaskádových vazeb!", station.getName());
+        log.warn("Stanoviště {} bylo TRVALE smazáno vč. kaskádových vazeb!", stationName);
+
+        // ZÁZNAM DO AUDITU
+        auditLogService.logAction(
+                "HARD_DELETE_STATION",
+                "Station",
+                stationId.toString(),
+                "Stanoviště '" + stationName + "' bylo TRVALE SMAZÁNO z databáze (Hard Delete)."
+        );
     }
 }

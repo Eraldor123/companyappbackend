@@ -2,8 +2,10 @@ package com.companyapp.backend.services.impl;
 
 import com.companyapp.backend.entity.Shift;
 import com.companyapp.backend.entity.ShiftAssignment;
+import com.companyapp.backend.repository.AttendanceLogRepository;
 import com.companyapp.backend.repository.ShiftAssignmentRepository;
 import com.companyapp.backend.repository.ShiftRepository;
+import com.companyapp.backend.services.AuditLogService; // PŘIDÁNO
 import com.companyapp.backend.services.ShiftService;
 import com.companyapp.backend.services.dto.request.ShiftUpdateRequest;
 import com.companyapp.backend.services.dto.response.ShiftDto;
@@ -12,7 +14,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
@@ -23,7 +24,9 @@ import java.util.UUID;
 public class ShiftServiceImpl implements ShiftService {
 
     private final ShiftRepository shiftRepository;
-    private final ShiftAssignmentRepository shiftAssignmentRepository; // PŘIDÁNO: Nutné pro mazání přiřazení
+    private final ShiftAssignmentRepository shiftAssignmentRepository;
+    private final AttendanceLogRepository attendanceLogRepository;
+    private final AuditLogService auditLogService; // PŘIDÁNO: Záznam do auditu
 
     @Override
     @Transactional
@@ -37,6 +40,15 @@ public class ShiftServiceImpl implements ShiftService {
         shift.setDescription(request.getDescription());
 
         Shift savedShift = shiftRepository.save(shift);
+
+        // ZÁZNAM DO AUDITU
+        auditLogService.logAction(
+                "UPDATE_SHIFT",
+                "Shift",
+                savedShift.getId().toString(),
+                "Upravena směna (Kapacita: " + savedShift.getRequiredCapacity() + "). Stanoviště: " + savedShift.getStation().getName()
+        );
+
         return mapToDto(savedShift);
     }
 
@@ -57,10 +69,12 @@ public class ShiftServiceImpl implements ShiftService {
                 .orElseThrow(() -> new ResourceNotFoundException("Směna nenalezena."));
 
         ZonedDateTime splitTime = originalShift.getStartTime()
+                .withZoneSameInstant(ZoneId.of("Europe/Prague"))
                 .withHour(14)
                 .withMinute(0)
                 .withSecond(0)
-                .withNano(0);
+                .withNano(0)
+                .withZoneSameInstant(ZoneId.of("UTC"));
 
         if (originalShift.getStartTime().isBefore(splitTime) && originalShift.getEndTime().isAfter(splitTime)) {
             Shift newShift = new Shift();
@@ -74,6 +88,15 @@ public class ShiftServiceImpl implements ShiftService {
 
             originalShift.setEndTime(splitTime);
             shiftRepository.save(originalShift);
+
+            // ZÁZNAM DO AUDITU
+            auditLogService.logAction(
+                    "SPLIT_SHIFT",
+                    "Shift",
+                    originalShift.getId().toString(),
+                    "Směna rozdělena ve 14:00. Nová směna ID: " + newShift.getId()
+            );
+
         } else {
             throw new IllegalStateException("Tuto směnu nelze rozdělit (neobsahuje čas 14:00).");
         }
@@ -82,22 +105,35 @@ public class ShiftServiceImpl implements ShiftService {
     @Override
     @Transactional
     public void deleteShift(UUID id) {
-        // 1. Ověříme, zda směna existuje
         Shift shift = shiftRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Směna s ID " + id + " nebyla nalezena."));
 
-        // 2. Najdeme a smažeme všechna přiřazení (assignments) pro tuto konkrétní směnu
-        // Použijeme efektivnější způsob: najdeme přiřazení podle směny
         List<ShiftAssignment> assignments = shiftAssignmentRepository.findByShiftDateBetween(shift.getShiftDate(), shift.getShiftDate())
                 .stream()
                 .filter(a -> a.getShift().getId().equals(id))
                 .toList();
 
+        for (ShiftAssignment assignment : assignments) {
+            if (attendanceLogRepository.findByShiftAssignmentId(assignment.getId()).isPresent()) {
+                throw new IllegalStateException("Směnu nelze smazat, protože zaměstnanci na ní již mají zaznamenanou docházku.");
+            }
+        }
+
         if (!assignments.isEmpty()) {
             shiftAssignmentRepository.deleteAll(assignments);
         }
 
-        // 3. Smažeme samotnou směnu
+        // Uložíme si info pro log, než objekt smažeme
+        String dateAndStation = shift.getShiftDate() + " na stanovišti " + shift.getStation().getName();
+
         shiftRepository.delete(shift);
+
+        // ZÁZNAM DO AUDITU
+        auditLogService.logAction(
+                "DELETE_SHIFT",
+                "Shift",
+                id.toString(),
+                "Kompletně smazána směna z " + dateAndStation + " (odebráno " + assignments.size() + " uživatelů)."
+        );
     }
 }

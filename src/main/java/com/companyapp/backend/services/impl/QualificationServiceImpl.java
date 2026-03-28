@@ -7,6 +7,7 @@ import com.companyapp.backend.entity.UserProfile;
 import com.companyapp.backend.repository.ContractRepository;
 import com.companyapp.backend.repository.StationRepository;
 import com.companyapp.backend.repository.UserRepository;
+import com.companyapp.backend.services.AuditLogService; // PŘIDÁNO
 import com.companyapp.backend.services.QualificationService;
 import com.companyapp.backend.services.dto.response.EmployeeQualificationDto;
 import com.companyapp.backend.services.exception.ResourceNotFoundException;
@@ -29,6 +30,7 @@ public class QualificationServiceImpl implements QualificationService {
     private final UserRepository userRepository;
     private final StationRepository stationRepository;
     private final ContractRepository contractRepository;
+    private final AuditLogService auditLogService; // PŘIDÁNO
 
     @Override
     @Transactional(readOnly = true)
@@ -62,10 +64,26 @@ public class QualificationServiceImpl implements QualificationService {
 
         List<Station> stations = stationRepository.findAllById(stationIds);
 
-        // Hibernate se postará o vyčištění tabulky user_qualified_stations a vložení nových ID
         user.setQualifiedStations(new HashSet<>(stations));
         userRepository.save(user);
         log.info("Přiřazená stanoviště byla aktualizována pro uživatele {}.", userId);
+
+        // ZÁZNAM DO AUDITU
+        // Vytvoříme si řetězec s názvy stanovišť, ať je log hezky čitelný
+        String stationNames = stations.stream()
+                .map(Station::getName)
+                .collect(Collectors.joining(", "));
+
+        if (stationNames.isEmpty()) {
+            stationNames = "Žádná (všechny odebrány)";
+        }
+
+        auditLogService.logAction(
+                "UPDATE_USER_QUALIFICATIONS",
+                "User",
+                userId.toString(),
+                "Změněny kvalifikace pro uživatele " + user.getEmail() + ". Nový seznam povolených stanovišť: [" + stationNames + "]."
+        );
     }
 
     @Override
@@ -74,7 +92,6 @@ public class QualificationServiceImpl implements QualificationService {
         Station station = stationRepository.findById(stationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Stanoviště nenalezeno."));
 
-        // Pokud stanoviště nevyžaduje kvalifikaci, může tam kdokoliv
         if (Boolean.FALSE.equals(station.getNeedsQualification())) {
             return true;
         }

@@ -2,6 +2,7 @@ package com.companyapp.backend.services.impl;
 
 import com.companyapp.backend.entity.*;
 import com.companyapp.backend.repository.*;
+import com.companyapp.backend.services.AuditLogService; // PŘIDÁNO
 import com.companyapp.backend.services.AutoPlanService;
 import com.companyapp.backend.services.ShiftAssignmentService;
 import com.companyapp.backend.services.dto.request.AutoPlanRequestDto;
@@ -27,11 +28,11 @@ public class AutoPlanServiceImpl implements AutoPlanService {
     private final AvailabilityRepository availabilityRepository;
     private final ShiftAssignmentRepository shiftAssignmentRepository;
     private final ShiftAssignmentService shiftAssignmentService;
+    private final AuditLogService auditLogService; // PŘIDÁNO
 
     @Override
     @Transactional
     public void runAutoPlanning(AutoPlanRequestDto request) {
-        // Určení rozsahu: buď konkrétní den, nebo rozsah týdne z frontendu
         LocalDate start = (request.getTargetDate() != null) ? request.getTargetDate() : request.getStartDate();
         LocalDate end = (request.getTargetDate() != null) ? request.getTargetDate() : request.getEndDate();
 
@@ -43,7 +44,6 @@ public class AutoPlanServiceImpl implements AutoPlanService {
 
         List<Shift> shifts = shiftRepository.findByShiftDateBetween(start, end);
 
-        // <--- NOVINKA: VYFILTRUJEME JEN ZVOLENOU KATEGORII --->
         if (request.getCategoryId() != null) {
             shifts = shifts.stream()
                     .filter(s -> s.getStation().getCategory().getId().equals(request.getCategoryId()))
@@ -54,8 +54,9 @@ public class AutoPlanServiceImpl implements AutoPlanService {
         List<User> users = userRepository.findAllActiveUsersWithDetails();
         List<Availability> avails = availabilityRepository.findByDateRange(start, end);
 
-        // KLÍČOVÉ: Seřadíme směny chronologicky, aby se nejdříve plnilo ráno
         shifts.sort(Comparator.comparing(Shift::getStartTime));
+
+        int successfulAssignments = 0; // Sledujeme počet úspěšných přiřazení pro log
 
         for (Shift shift : shifts) {
             long currentAssigned = shiftAssignmentRepository.countByShiftId(shift.getId());
@@ -65,8 +66,8 @@ public class AutoPlanServiceImpl implements AutoPlanService {
                 User best = findBestCandidate(shift, users, avails, request);
                 if (best != null) {
                     try {
-                        // assignShift má vlastní validace, ale díky naší toleranci v findBestCandidate projde
                         shiftAssignmentService.assignShift(shift.getId(), best.getId());
+                        successfulAssignments++;
                         log.info("Automaticky přiřazen {} na stanoviště {}", best.getLastName(), shift.getStation().getName());
                     } catch (Exception e) {
                         log.warn("Přiřazení selhalo pro {}: {}", best.getLastName(), e.getMessage());
@@ -74,6 +75,14 @@ public class AutoPlanServiceImpl implements AutoPlanService {
                 }
             }
         }
+
+        // ZÁZNAM DO AUDITU
+        auditLogService.logAction(
+                "RUN_AUTOPLAN",
+                "ShiftAssignment",
+                "Range_" + start + "_to_" + end,
+                "Spuštěn AutoPlán. Výsledek: Úspěšně automaticky obsazeno " + successfulAssignments + " míst ve směnách v období od " + start + " do " + end + "."
+        );
     }
 
     private User findBestCandidate(Shift shift, List<User> users, List<Availability> avails, AutoPlanRequestDto req) {
@@ -81,11 +90,8 @@ public class AutoPlanServiceImpl implements AutoPlanService {
         double maxScore = -1.0;
 
         for (User user : users) {
-            // 1. KONTROLA DOSTUPNOSTI (DOP/ODP)
             if (!isUserAvailable(user, shift, avails)) continue;
 
-            // 2. KONTROLA PŘEKRYVU S TOLERANCÍ (31 MINUT)
-            // Ignorujeme okraje směny, aby mohl stejný člověk dělat ranní (do 14:00) i odpolední (od 13:30)
             LocalDateTime checkStart = shift.getStartTime().toLocalDateTime().plusMinutes(31);
             LocalDateTime checkEnd = shift.getEndTime().toLocalDateTime().minusMinutes(31);
 
@@ -102,14 +108,11 @@ public class AutoPlanServiceImpl implements AutoPlanService {
 
             if (overlapCount > 0) continue;
 
-            // 3. VÝPOČET SKÓRE
-            // a) Kvalifikace (Zaučování)
             boolean isQualified = user.getQualifiedStations().stream()
                     .anyMatch(s -> s.getId().equals(shift.getStation().getId()));
 
             double trainingScore = isQualified ? (100.0 - req.getTrainingWeight()) : (double) req.getTrainingWeight();
 
-            // b) Férovost (Aby jeden člověk neměl všechno, pokud je víc lidí)
             long weeklyShifts = shiftAssignmentRepository.findAssignmentsForUsersInDateRange(
                     List.of(user.getId()),
                     shift.getShiftDate().with(java.util.Calendar.MONDAY == 1 ? java.time.DayOfWeek.MONDAY : java.time.DayOfWeek.MONDAY),
@@ -117,7 +120,6 @@ public class AutoPlanServiceImpl implements AutoPlanService {
             ).size();
             double fairnessScore = (20.0 - weeklyShifts) * (req.getFairnessWeight() / 10.0);
 
-            // c) Priorita pro dopoledne (Morning Bonus)
             double morningBonus = (shift.getStartTime().withZoneSameInstant(ZoneId.of("Europe/Prague")).getHour() < 12) ? 50.0 : 0.0;
 
             double totalScore = trainingScore + fairnessScore + morningBonus;
@@ -134,14 +136,13 @@ public class AutoPlanServiceImpl implements AutoPlanService {
         return avails.stream()
                 .filter(a -> a.getUserId().equals(user.getId()) && a.getAvailableDate().equals(shift.getShiftDate()))
                 .anyMatch(a -> {
-                    // Převod času směny na pražský čas pro správné vyhodnocení DOP/ODP
                     ZonedDateTime localStart = shift.getStartTime().withZoneSameInstant(ZoneId.of("Europe/Prague"));
                     int hour = localStart.getHour();
 
                     if (hour < 12) {
-                        return a.isMorning(); // Směna začíná dopoledne
+                        return a.isMorning();
                     } else {
-                        return a.isAfternoon(); // Směna začíná odpoledne
+                        return a.isAfternoon();
                     }
                 });
     }

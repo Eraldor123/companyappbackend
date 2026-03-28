@@ -27,29 +27,24 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     @Override
     @Transactional(readOnly = true)
     public PositionHierarchyDto getFullHierarchy() {
-        // OPRAVA VÝKONU: Načteme všechno jen JEDNOU předem
         List<MainCategory> allCategories = categoryRepository.findAll();
         List<Station> allStations = stationRepository.findAll();
 
-        // 1. KATEGORIE
         List<PositionHierarchyDto.CategoryNodeDto> categoryNodes = allCategories.stream()
                 .sorted(Comparator.comparing(c -> c.getSortOrder() == null ? 999 : c.getSortOrder()))
                 .map(cat -> {
 
-                    // 2. STANOVIŠTĚ
                     List<PositionHierarchyDto.StationNodeDto> stationNodes = allStations.stream()
                             .filter(s -> s.getCategory().getId().equals(cat.getId()))
                             .sorted(Comparator.comparing(s -> s.getSortOrder() == null ? 999 : s.getSortOrder()))
                             .map(stat -> {
 
-                                // 3. ŠABLONY
                                 List<ShiftTemplate> templates = templateRepository.findByStationId(stat.getId());
 
                                 List<PositionHierarchyDto.TemplateNodeDto> templateNodes = templates.stream()
                                         .sorted(Comparator.comparing(t -> t.getSortOrder() == null ? 999 : t.getSortOrder()))
                                         .map(tmpl -> {
 
-                                            // BEZPEČNÉ GENEROVÁNÍ TEXTU "timeRange"
                                             String timeRange;
                                             if (Boolean.TRUE.equals(tmpl.getUseOpeningHours())) {
                                                 timeRange = "Dle otevírací doby";

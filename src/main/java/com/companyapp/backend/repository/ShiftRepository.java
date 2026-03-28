@@ -1,9 +1,10 @@
 package com.companyapp.backend.repository;
 
 import com.companyapp.backend.entity.Shift;
-import com.companyapp.backend.entity.ShiftTemplate;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -24,5 +26,11 @@ public interface ShiftRepository extends JpaRepository<Shift, UUID> {
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime,
             @Param("stationId") Integer stationId);
+
     List<Shift> findByShiftDateBetween(LocalDate start, LocalDate end);
+
+    // PŘIDÁNO: Pesimistický zámek pro bezpečné přiřazování bez "Race Condition"
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM Shift s WHERE s.id = :id")
+    Optional<Shift> findByIdWithLock(@Param("id") UUID id);
 }

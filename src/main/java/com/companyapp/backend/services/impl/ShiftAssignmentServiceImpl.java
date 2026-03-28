@@ -5,6 +5,7 @@ import com.companyapp.backend.entity.*;
 import com.companyapp.backend.enums.AvailabilityStatus;
 import com.companyapp.backend.services.exception.*;
 import com.companyapp.backend.repository.*;
+import com.companyapp.backend.services.AuditLogService; // PŘIDÁNO
 import com.companyapp.backend.services.QualificationService;
 import com.companyapp.backend.services.ShiftAssignmentService;
 import lombok.RequiredArgsConstructor;
@@ -26,34 +27,30 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
     private final ShiftAssignmentRepository shiftAssignmentRepository;
     private final AvailabilityRepository availabilityRepository;
     private final QualificationService qualificationService;
+    private final AuditLogService auditLogService; // PŘIDÁNO: Záznam do auditu
 
     @Override
     @Transactional
     public ShiftAssignmentDto assignShift(UUID shiftId, UUID userId) {
         log.info("Zahajuji proces přiřazení směny {} pro uživatele {}", shiftId, userId);
 
-        Shift shift = shiftRepository.findById(shiftId)
+        Shift shift = shiftRepository.findByIdWithLock(shiftId)
                 .orElseThrow(() -> new ResourceNotFoundException("Směna nebyla nalezena."));
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Uživatel nebyl nalezen."));
 
-        // 1. KONTROLA KAPACITY (Upraveno na kapacitu konkrétní směny)
-        // Teď už se nedíváme na station.getCapacityLimit, ale na to, co jsi nastavil u směny
         long currentCount = shiftAssignmentRepository.countByShiftId(shiftId);
         if (currentCount >= shift.getRequiredCapacity()) {
             throw new CapacityExceededException("Kapacita této konkrétní směny je již vyčerpána (" + shift.getRequiredCapacity() + ").");
         }
 
-        // 2. Pravidlo dostupnosti
         boolean hasAvail = availabilityRepository.existsByUserIdAndAvailableDateAndStatus(
                 userId, shift.getStartTime().toLocalDate(), AvailabilityStatus.AVAILABLE);
         if (!hasAvail) {
             throw new AvailabilityNotProvidedException("Zaměstnanec nemá nahlášenou dostupnost na tento den.");
         }
 
-
-        // 4. Overlap Check (S TOLERANCÍ PRO PŘEDÁVÁNÍ SMĚN)
         LocalDateTime checkStart = shift.getStartTime().toLocalDateTime().plusMinutes(35);
         LocalDateTime checkEnd = shift.getEndTime().toLocalDateTime().minusMinutes(35);
 
@@ -63,46 +60,66 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
         }
 
         long overlappingCount = shiftAssignmentRepository.countOverlappingShifts(
-                userId,
-                checkStart,
-                checkEnd
+                userId, checkStart, checkEnd
         );
 
         if (overlappingCount > 0) {
             throw new ShiftCollisionException("Zaměstnanec již v tomto čase má jinou směnu (překryv je příliš velký).");
         }
 
-        // 5. Uložení přiřazení
         ShiftAssignment assignment = new ShiftAssignment();
         assignment.setShift(shift);
         assignment.setEmployee(user);
         assignment.setStartTime(shift.getStartTime().toLocalDateTime());
         assignment.setEndTime(shift.getEndTime().toLocalDateTime());
 
-        // Volitelně: Aktualizace stavu dostupnosti (např. na PLANNED)
         availabilityRepository.updateStatusByUserIdAndAvailableDate(
                 userId, shift.getStartTime().toLocalDate());
 
-        return mapToDto(shiftAssignmentRepository.save(assignment));
+        ShiftAssignment savedAssignment = shiftAssignmentRepository.save(assignment);
+
+        // ZÁZNAM DO AUDITU
+        auditLogService.logAction(
+                "ASSIGN_USER_TO_SHIFT",
+                "ShiftAssignment",
+                savedAssignment.getId().toString(),
+                "Uživatel " + user.getEmail() + " přiřazen na směnu (Stanoviště: " + shift.getStation().getName() + ", Datum: " + shift.getShiftDate() + ")."
+        );
+
+        return mapToDto(savedAssignment);
     }
 
-    // --- NOVÁ METODA PRO MAZÁNÍ PODLE SHIFT + USER ---
     @Override
     @Transactional
     public void removeAssignmentByShiftAndUser(UUID shiftId, UUID userId) {
         log.info("Odebírám uživatele {} ze směny {}", userId, shiftId);
 
-        // Důležité: metoda v repository musí existovat (deleteByShiftIdAndEmployeeId)
+        // ZÁZNAM DO AUDITU (zaznamenáme před smazáním)
+        auditLogService.logAction(
+                "REMOVE_USER_FROM_SHIFT",
+                "ShiftAssignment",
+                shiftId.toString() + "_" + userId.toString(),
+                "Uživatel (ID: " + userId + ") odebrán ze směny (ID: " + shiftId + ")."
+        );
+
         shiftAssignmentRepository.deleteByShiftIdAndEmployeeId(shiftId, userId);
     }
 
     @Override
     @Transactional
     public void removeAssignment(UUID id) {
-        log.info("Odebírám přiřazení podle ID: {}", id);
         if (!shiftAssignmentRepository.existsById(id)) {
             throw new ResourceNotFoundException("Přiřazení směny neexistuje.");
         }
+
+        // ZÁZNAM DO AUDITU
+        auditLogService.logAction(
+                "REMOVE_SHIFT_ASSIGNMENT",
+                "ShiftAssignment",
+                id.toString(),
+                "Zrušeno přiřazení (Assignment ID: " + id + ")."
+        );
+
         shiftAssignmentRepository.deleteById(id);
     }
 
