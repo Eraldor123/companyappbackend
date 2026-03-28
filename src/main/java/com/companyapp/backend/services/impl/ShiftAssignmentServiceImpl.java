@@ -52,10 +52,6 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
             throw new AvailabilityNotProvidedException("Zaměstnanec nemá nahlášenou dostupnost na tento den.");
         }
 
-        // 3. Kontrola kvalifikace
-        if (!qualificationService.isUserQualifiedForStation(userId, shift.getStation().getId())) {
-            throw new MissingQualificationException("Chybí potřebná kvalifikace pro toto stanoviště.");
-        }
 
         // 4. Overlap Check (S TOLERANCÍ PRO PŘEDÁVÁNÍ SMĚN)
         LocalDateTime checkStart = shift.getStartTime().toLocalDateTime().plusMinutes(35);

@@ -7,6 +7,8 @@ import com.companyapp.backend.repository.ShiftAssignmentRepository;
 import com.companyapp.backend.repository.ShiftRepository;
 import com.companyapp.backend.repository.UserRepository;
 import com.companyapp.backend.services.OperatingHoursService;
+import com.companyapp.backend.services.AutoPlanService; // Přidat import
+import com.companyapp.backend.services.dto.request.AutoPlanRequestDto;
 import com.companyapp.backend.services.dto.response.AssignedUserDto;
 import com.companyapp.backend.services.dto.response.PlannerUserDto;
 import com.companyapp.backend.services.dto.response.ScheduleShiftDto;
@@ -32,7 +34,7 @@ public class ScheduleController {
     private final UserRepository userRepository;
     private final ShiftRepository shiftRepository;
     private final ShiftAssignmentRepository shiftAssignmentRepository;
-
+    private final AutoPlanService autoPlanService;
     @GetMapping("/week-view")
     public ResponseEntity<Map<String, Object>> getWeeklySchedule(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -152,5 +154,10 @@ public class ScheduleController {
         }
 
         return ResponseEntity.ok(result);
+    }
+    @PostMapping("/auto-plan")
+    public ResponseEntity<?> runAutoPlan(@RequestBody AutoPlanRequestDto request) { // Upravit na AutoPlanRequestDto
+        autoPlanService.runAutoPlanning(request); // Volat autoPlanService místo scheduleService
+        return ResponseEntity.ok().build();
     }
 }
