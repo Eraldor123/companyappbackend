@@ -1,6 +1,5 @@
 package com.companyapp.backend.services.dto.request;
 
-
 import lombok.Data;
 import java.time.LocalDate;
 
@@ -11,6 +10,5 @@ public class AutoPlanRequestDto {
     private LocalDate startDate;
     private LocalDate endDate;
     private LocalDate targetDate;
+    private Integer categoryId;  // <--- PŘIDÁNO: Filtrování podle aktuální kategorie v UI
 }
-
-

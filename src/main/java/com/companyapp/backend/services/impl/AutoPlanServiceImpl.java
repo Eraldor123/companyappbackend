@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -41,6 +42,15 @@ public class AutoPlanServiceImpl implements AutoPlanService {
                 start, end, request.getFairnessWeight(), request.getTrainingWeight());
 
         List<Shift> shifts = shiftRepository.findByShiftDateBetween(start, end);
+
+        // <--- NOVINKA: VYFILTRUJEME JEN ZVOLENOU KATEGORII --->
+        if (request.getCategoryId() != null) {
+            shifts = shifts.stream()
+                    .filter(s -> s.getStation().getCategory().getId().equals(request.getCategoryId()))
+                    .collect(Collectors.toList());
+            log.info("Aplikován filtr na kategorii ID {}. K plánování zbývá {} směn.", request.getCategoryId(), shifts.size());
+        }
+
         List<User> users = userRepository.findAllActiveUsersWithDetails();
         List<Availability> avails = availabilityRepository.findByDateRange(start, end);
 
@@ -108,7 +118,6 @@ public class AutoPlanServiceImpl implements AutoPlanService {
             double fairnessScore = (20.0 - weeklyShifts) * (req.getFairnessWeight() / 10.0);
 
             // c) Priorita pro dopoledne (Morning Bonus)
-            // Pokud směna začíná před 12:00, dostane kandidát bonus, aby se ranní směny zaplnily přednostně
             double morningBonus = (shift.getStartTime().withZoneSameInstant(ZoneId.of("Europe/Prague")).getHour() < 12) ? 50.0 : 0.0;
 
             double totalScore = trainingScore + fairnessScore + morningBonus;
@@ -121,10 +130,6 @@ public class AutoPlanServiceImpl implements AutoPlanService {
         return best;
     }
 
-    /**
-     * Pomocná metoda pro ověření, zda má uživatel v daný čas nahlášené volno.
-     * Pracuje s pražským časem, aby hodiny v DB (UTC) odpovídaly kalendáři (CET/CEST).
-     */
     private boolean isUserAvailable(User user, Shift shift, List<Availability> avails) {
         return avails.stream()
                 .filter(a -> a.getUserId().equals(user.getId()) && a.getAvailableDate().equals(shift.getShiftDate()))
