@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- Proměnná pro cestu a název logovacího souboru -->
+    <property name="LOG_FILE" value="logs/companyapp.log"/>
+
+    <!-- 1. Vypisování do konzole (barevně, stejně jako to máš doteď v IntelliJ) -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 2. Zapisování do souboru (Rolling - automaticky vytvoří nový soubor každý den, ať to nebobtná) -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_FILE}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- Každý den se starý log archivuje a přidá se k němu datum -->
+            <fileNamePattern>logs/companyapp-%d{yyyy-MM-dd}.log</fileNamePattern>
+            <!-- Udržujeme historii logů jen 30 dní zpětně, pak se automaticky mažou -->
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <!-- V souboru nepotřebujeme barvičky, ale chceme detailní formát (čas, vlákno, třída, zpráva) -->
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Nastavení úrovně logování pro celou aplikaci -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="FILE" />
+    </root>
+
+    <!-- Ztišení otravných a nepodstatných zpráv z některých knihoven -->
+    <logger name="org.hibernate" level="WARN" />
+    <logger name="org.springframework" level="INFO" />
+
+</configuration>

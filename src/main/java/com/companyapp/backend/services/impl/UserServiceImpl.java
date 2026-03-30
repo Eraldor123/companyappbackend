@@ -6,9 +6,10 @@ import com.companyapp.backend.entity.UserProfile;
 import com.companyapp.backend.enums.AccessLevel;
 import com.companyapp.backend.enums.ContractType;
 import com.companyapp.backend.repository.ContractRepository;
-import com.companyapp.backend.repository.UserRepository;
 import com.companyapp.backend.repository.UserProfileRepository;
-import com.companyapp.backend.services.AuditLogService; // PŘIDÁNO
+import com.companyapp.backend.repository.UserRepository;
+import com.companyapp.backend.services.AuditLogService;
+import com.companyapp.backend.services.EmailService;
 import com.companyapp.backend.services.UserService;
 import com.companyapp.backend.services.dto.request.UserRegistrationDto;
 import com.companyapp.backend.services.dto.response.UserProfileDto;
@@ -34,6 +35,9 @@ public class UserServiceImpl implements UserService {
     private final ContractRepository contractRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditLogService auditLogService; // PŘIDÁNO: Záznam do auditu
+    private final EmailService emailService; // PŘIDÁNO: Pro odesílání e-mailů
+
+    private static final String userNotFound = "Uživatel nenalezen.";
 
     @Override
     @Transactional
@@ -49,15 +53,24 @@ public class UserServiceImpl implements UserService {
         user.setRoles(request.getAccessLevels());
         user.setActive(true);
 
+        // 1. Generování PINu pro terminál (zůstává)
         String generatedPin;
         String hashedPin;
         do {
             generatedPin = user.getRoles().contains(AccessLevel.TERMINAL) ? "0000" : String.format("%04d", new java.util.Random().nextInt(10000));
             hashedPin = passwordEncoder.encode(generatedPin);
         } while (userRepository.findByPinAndIsActiveTrue(hashedPin).isPresent());
-
-        log.info("Vygenerován UNIKÁTNÍ PIN pro uživatele (odeslat na email): {}", generatedPin);
         user.setPin(hashedPin);
+
+        // 2. PŘIDÁNO: Generování hesla pro web (např. 8 náhodných znaků)
+        String generatedPassword = UUID.randomUUID().toString().substring(0, 8);
+        user.setPassword(passwordEncoder.encode(generatedPassword));
+
+        log.warn("==========================================================");
+        log.warn("NOVÝ UŽIVATEL: {}", request.getEmail());
+        log.warn("JEHO PIN (TERMINÁL): {}", generatedPin);
+        log.warn("JEHO HESLO (WEB): {}", generatedPassword);
+        log.warn("==========================================================");
 
         UserProfile profile = new UserProfile();
         profile.setFirstName(request.getFirstName());
@@ -90,6 +103,12 @@ public class UserServiceImpl implements UserService {
                 "Vytvořen nový uživatel: " + user.getEmail() + " (Smlouva: " + contract.getType() + ")."
         );
 
+        if (request.isSendPassword()) {
+            // Tady bys mohl vytvořit metodu v EmailService pro uvítací e-mail
+            emailService.sendRegistrationEmail(user.getEmail(), generatedPin, generatedPassword);
+            log.info("E-mail s přístupovými údaji odeslán na: {}", user.getEmail());
+        }
+
         return mapToProfileDto(user, profile, contract);
     }
 
@@ -97,7 +116,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void deactivateUser(UUID userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Uživatel nenalezen."));
+                .orElseThrow(() -> new ResourceNotFoundException(userNotFound));
         user.setActive(false);
         userRepository.save(user);
         log.info("Uživatel {} byl deaktivován. Historie zůstala zachována.", userId);
@@ -115,7 +134,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void hardDeleteUser(UUID userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Uživatel nenalezen."));
+                .orElseThrow(() -> new ResourceNotFoundException(userNotFound));
 
         String deletedEmail = user.getEmail();
         userRepository.delete(user);
@@ -134,7 +153,7 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public UserProfileDto getUserProfile(UUID userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Uživatel nenalezen."));
+                .orElseThrow(() -> new ResourceNotFoundException(userNotFound));
 
         if (user.getUserProfile() == null) {
             throw new ResourceNotFoundException("Profil uživatele nenalezen.");

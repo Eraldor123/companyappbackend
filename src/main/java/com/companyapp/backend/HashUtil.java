@@ -2,6 +2,8 @@ package com.companyapp.backend;
 
 public class HashUtil {
 
+    private static final String SALT = "s0m3R@nd0mS@lt";
+
     public static String hash(String input) {
         // Sha256 hashing implementation
         try {
@@ -17,5 +19,13 @@ public class HashUtil {
         } catch (Exception ex) {
             throw new RuntimeException(ex);
         }
+    }
+
+    public static boolean verify(String input, String hash) {
+        return hash(input).equals(hash);
+    }
+
+    public static String hashWithSalt(String input) {
+        return hash(input + SALT);
     }
 }

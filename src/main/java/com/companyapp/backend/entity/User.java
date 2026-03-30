@@ -9,7 +9,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
-import org.jspecify.annotations.Nullable;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -34,6 +33,9 @@ public class User {
     @NotBlank(message = "PIN kód pro terminál je vyžadován.")
     @Column(name = "pin", nullable = false)
     private String pin;
+    // --- PŘIDÁNO: Nové heslo pro web ---
+    @Column(name = "password") // Zatím necháme nullable, pro případ starých dat
+    private String password;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))
@@ -81,9 +83,10 @@ public class User {
         return this.isActive;
     }
 
-    public @Nullable String getPinHash() {
+    public String getPinHash() {
         return HashUtil.hash(this.pin);
     }
+    public String getPasswordHash() { return this.password; }
 
     public String getLastName() {
         return userProfile != null ? userProfile.getLastName() : null;
@@ -91,5 +94,16 @@ public class User {
 
     public String getFirstName() {
         return userProfile != null ? userProfile.getFirstName() : null;
+    }
+
+    @OneToOne(mappedBy = "user", optional = false)
+    private PasswordResetToken passwordResetToken;
+
+    public PasswordResetToken getPasswordResetToken() {
+        return passwordResetToken;
+    }
+
+    public void setPasswordResetToken(PasswordResetToken passwordResetToken) {
+        this.passwordResetToken = passwordResetToken;
     }
 }

@@ -1,21 +1,28 @@
 package com.companyapp.backend.services.impl;
 
-import com.companyapp.backend.services.dto.response.ShiftAssignmentDto;
-import com.companyapp.backend.entity.*;
-import com.companyapp.backend.enums.AvailabilityStatus;
-import com.companyapp.backend.services.exception.*;
-import com.companyapp.backend.repository.*;
-import com.companyapp.backend.services.AuditLogService; // PŘIDÁNO
+import com.companyapp.backend.entity.Shift;
+import com.companyapp.backend.entity.ShiftAssignment;
+import com.companyapp.backend.entity.User;
+import com.companyapp.backend.repository.AvailabilityRepository;
+import com.companyapp.backend.repository.ShiftAssignmentRepository;
+import com.companyapp.backend.repository.ShiftRepository;
+import com.companyapp.backend.repository.UserRepository;
+import com.companyapp.backend.services.AuditLogService;
 import com.companyapp.backend.services.QualificationService;
 import com.companyapp.backend.services.ShiftAssignmentService;
+import com.companyapp.backend.services.dto.response.ShiftAssignmentDto;
+import com.companyapp.backend.services.exception.AvailabilityNotProvidedException;
+import com.companyapp.backend.services.exception.CapacityExceededException;
+import com.companyapp.backend.services.exception.ResourceNotFoundException;
+import com.companyapp.backend.services.exception.ShiftCollisionException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.UUID;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -28,6 +35,8 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
     private final AvailabilityRepository availabilityRepository;
     private final QualificationService qualificationService;
     private final AuditLogService auditLogService; // PŘIDÁNO: Záznam do auditu
+
+    private final static String entityName = "ShiftAssignment";
 
     @Override
     @Transactional
@@ -45,8 +54,8 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
             throw new CapacityExceededException("Kapacita této konkrétní směny je již vyčerpána (" + shift.getRequiredCapacity() + ").");
         }
 
-        boolean hasAvail = availabilityRepository.existsByUserIdAndAvailableDateAndStatus(
-                userId, shift.getStartTime().toLocalDate(), AvailabilityStatus.AVAILABLE);
+        boolean hasAvail = availabilityRepository.existsByUserIdAndAvailableDate(
+                userId, shift.getStartTime().toLocalDate());
         if (!hasAvail) {
             throw new AvailabilityNotProvidedException("Zaměstnanec nemá nahlášenou dostupnost na tento den.");
         }
@@ -81,7 +90,7 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
         // ZÁZNAM DO AUDITU
         auditLogService.logAction(
                 "ASSIGN_USER_TO_SHIFT",
-                "ShiftAssignment",
+                entityName,
                 savedAssignment.getId().toString(),
                 "Uživatel " + user.getEmail() + " přiřazen na směnu (Stanoviště: " + shift.getStation().getName() + ", Datum: " + shift.getShiftDate() + ")."
         );
@@ -97,7 +106,7 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
         // ZÁZNAM DO AUDITU (zaznamenáme před smazáním)
         auditLogService.logAction(
                 "REMOVE_USER_FROM_SHIFT",
-                "ShiftAssignment",
+                entityName,
                 shiftId.toString() + "_" + userId.toString(),
                 "Uživatel (ID: " + userId + ") odebrán ze směny (ID: " + shiftId + ")."
         );
@@ -115,7 +124,7 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
         // ZÁZNAM DO AUDITU
         auditLogService.logAction(
                 "REMOVE_SHIFT_ASSIGNMENT",
-                "ShiftAssignment",
+                entityName,
                 id.toString(),
                 "Zrušeno přiřazení (Assignment ID: " + id + ")."
         );

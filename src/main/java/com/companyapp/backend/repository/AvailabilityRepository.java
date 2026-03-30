@@ -1,7 +1,6 @@
 package com.companyapp.backend.repository;
 
 import com.companyapp.backend.entity.Availability;
-import com.companyapp.backend.enums.AvailabilityStatus; // Důležitý import pro starý kód
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -37,13 +36,10 @@ public interface AvailabilityRepository extends JpaRepository<Availability, Long
     // 2. STARÉ METODY (Zpětná kompatibilita pro ShiftAssignment)
     // ==========================================================
 
-    // Náš starý kód kontroloval AvailabilityStatus. Tímto dotazem ho "oblafneme"
-    // a prostě vrátíme true, pokud uživatel na daný den existuje.
     @Query("SELECT COUNT(a) > 0 FROM Availability a WHERE a.userId = :userId AND a.availableDate = :date")
-    boolean existsByUserIdAndAvailableDateAndStatus(
+    boolean existsByUserIdAndAvailableDate(
             @Param("userId") UUID userId,
-            @Param("date") LocalDate date,
-            @Param("status") AvailabilityStatus status
+            @Param("date") LocalDate date
     );
 
     // Stará metoda dříve asi měnila status. My ji teď napojíme na náš nový boolean "confirmed = true"
