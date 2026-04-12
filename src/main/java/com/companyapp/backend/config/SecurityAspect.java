@@ -3,7 +3,6 @@ package com.companyapp.backend.config;
 import com.companyapp.backend.entity.User;
 import com.companyapp.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Before;
 import org.springframework.security.access.AccessDeniedException;
