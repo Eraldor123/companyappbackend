@@ -30,4 +30,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"userProfile", "qualifiedStations"})
     @Query("SELECT u FROM User u WHERE u.isActive = true")
     List<User> findAllActiveUsersWithDetails();
+    // NAJDE VŠECHNY LIDI, KTEŘÍ MAJÍ DANOU KVALIFIKACI
+    List<User> findAllByQualifiedStationsContains(com.companyapp.backend.entity.Station station);
 }

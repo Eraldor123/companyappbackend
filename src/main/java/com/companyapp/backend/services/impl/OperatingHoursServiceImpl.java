@@ -183,4 +183,8 @@ public class OperatingHoursServiceImpl implements OperatingHoursService {
 
         pauseRuleRepo.save(entity);
     }
+    @Override
+    public boolean isAnyOperatingHoursPresent() {
+        return standardHoursRepo.count() > 0;
+    }
 }

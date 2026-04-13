@@ -19,8 +19,8 @@ public class AvailabilityController {
 
     @GetMapping("/monthly/{userId}/{yearMonthStr}")
     public ResponseEntity<?> getMonthlyAvailability(
-            @PathVariable UUID userId,
-            @PathVariable String yearMonthStr) {
+            @PathVariable("userId") UUID userId,            // PŘIDÁNO: "userId"
+            @PathVariable("yearMonthStr") String yearMonthStr) { // PŘIDÁNO: "yearMonthStr"
 
         // Převod textu "2026-03" na YearMonth
         YearMonth yearMonth = YearMonth.parse(yearMonthStr);

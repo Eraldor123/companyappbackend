@@ -96,7 +96,7 @@ public class User {
         return userProfile != null ? userProfile.getFirstName() : null;
     }
 
-    @OneToOne(mappedBy = "user", optional = false)
+    @OneToOne(mappedBy = "user", optional = true)
     private PasswordResetToken passwordResetToken;
 
     public PasswordResetToken getPasswordResetToken() {

@@ -20,4 +20,6 @@ public interface OperatingHoursService {
 
     PauseRuleDto getPauseRule();
     void updatePauseRule(PauseRuleDto dto);
+
+    boolean isAnyOperatingHoursPresent();
 }

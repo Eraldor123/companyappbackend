@@ -28,6 +28,7 @@ public class PositionSettingsController {
     private final MainCategoryRepository categoryRepository;
     private final StationRepository stationRepository;
     private final ShiftTemplateRepository shiftTemplateRepository;
+    private final com.companyapp.backend.repository.UserRepository userRepository;
 
     @GetMapping("/hierarchy")
     public ResponseEntity<PositionHierarchyDto> getHierarchy() {
@@ -182,10 +183,26 @@ public class PositionSettingsController {
     }
 
     @DeleteMapping("/stations/{id}")
+    @Transactional // <--- TOTO JE DŮLEŽITÉ, ABY SE VŠE UDĚLALO NAJEDNOU
     public ResponseEntity<?> deleteStation(@PathVariable Integer id) {
+        // 1. Najdeme stanoviště
+        Station station = stationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Stanoviště nenalezeno"));
+
+        // 2. Smažeme všechny šablony tohoto stanoviště (to už jsi tam měl)
         java.util.List<ShiftTemplate> templates = shiftTemplateRepository.findByStationId(id);
         shiftTemplateRepository.deleteAll(templates);
+
+        // 3. NAJDEME VŠECHNY ZAMĚSTNANCE A ODEBEREME JIM KVALIFIKACI NA TOTO STANOVIŠTĚ
+        java.util.List<com.companyapp.backend.entity.User> qualifiedUsers = userRepository.findAllByQualifiedStationsContains(station);
+        for (com.companyapp.backend.entity.User user : qualifiedUsers) {
+            user.getQualifiedStations().remove(station);
+            userRepository.save(user); // Uložíme uživatele bez této kvalifikace
+        }
+
+        // 4. Až teď můžeme stanoviště bezpečně a natvrdo smazat z databáze
         stationRepository.deleteById(id);
+
         return ResponseEntity.noContent().build();
     }
 

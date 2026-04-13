@@ -18,8 +18,8 @@ public class ShiftAssignmentController {
 
     @PostMapping
     public ResponseEntity<ShiftAssignmentDto> assignShift(
-            @RequestParam UUID shiftId,
-            @RequestParam UUID userId) {
+            @RequestParam("shiftId") UUID shiftId, // PŘIDÁNO: "shiftId"
+            @RequestParam("userId") UUID userId) { // PŘIDÁNO: "userId"
         ShiftAssignmentDto assignment = shiftAssignmentService.assignShift(shiftId, userId);
         return new ResponseEntity<>(assignment, HttpStatus.CREATED);
     }
@@ -28,8 +28,8 @@ public class ShiftAssignmentController {
     // Teď to bere parametry shiftId a userId, přesně jak to posílá React
     @DeleteMapping
     public ResponseEntity<Void> removeAssignment(
-            @RequestParam UUID shiftId,
-            @RequestParam UUID userId) {
+            @RequestParam("shiftId") UUID shiftId, // PŘIDÁNO: "shiftId"
+            @RequestParam("userId") UUID userId) { // PŘIDÁNO: "userId"
         shiftAssignmentService.removeAssignmentByShiftAndUser(shiftId, userId);
         return ResponseEntity.noContent().build();
     }
@@ -37,7 +37,7 @@ public class ShiftAssignmentController {
     // Tuhle původní metodu si tu můžeš nechat pro smazání podle ID záznamu,
     // pokud bys ji někdy potřeboval, ale změnili jsme cestu, aby nekolidovala.
     @DeleteMapping("/id/{id}")
-    public ResponseEntity<Void> removeAssignmentById(@PathVariable UUID id) {
+    public ResponseEntity<Void> removeAssignmentById(@PathVariable("id") UUID id) { // PŘIDÁNO: "id"
         shiftAssignmentService.removeAssignment(id);
         return ResponseEntity.noContent().build();
     }
