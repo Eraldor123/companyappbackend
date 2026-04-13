@@ -21,10 +21,12 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RestController
@@ -62,23 +64,46 @@ public class ScheduleController {
         List<Shift> rawShifts = shiftRepository.findByShiftDateBetween(startDate, endDate);
         List<ShiftAssignment> rawAssignments = shiftAssignmentRepository.findByShiftDateBetween(startDate, endDate);
 
-        // SUPER-POJISTKA proti smazaným (Ghost) uživatelům
-        Map<java.util.UUID, List<AssignedUserDto>> assignmentsByShift = rawAssignments.stream()
+        // Mapování přiřazení s detekcí kolizí a ochranou proti smazaným uživatelům
+        Map<UUID, List<AssignedUserDto>> assignmentsByShift = rawAssignments.stream()
                 .filter(sa -> sa.getShift() != null && sa.getEmployee() != null)
                 .collect(Collectors.groupingBy(
                         sa -> sa.getShift().getId(),
                         Collectors.mapping(sa -> {
                             try {
+                                UUID currentEmpId = sa.getEmployee().getId();
+                                LocalTime startA = sa.getStartTime().toLocalTime();
+                                LocalTime endA = sa.getEndTime().toLocalTime();
+                                LocalDate dateA = sa.getShift().getShiftDate();
+
+                                // Logika detekce kolize s 30min tolerancí
+                                boolean hasCollision = rawAssignments.stream()
+                                        .filter(other -> !other.getId().equals(sa.getId())) // neporovnávat se sebou
+                                        .filter(other -> other.getEmployee() != null && other.getEmployee().getId().equals(currentEmpId))
+                                        .filter(other -> other.getShift() != null && other.getShift().getShiftDate().equals(dateA))
+                                        .anyMatch(other -> {
+                                            LocalTime startB = other.getStartTime().toLocalTime();
+                                            LocalTime endB = other.getEndTime().toLocalTime();
+
+                                            // Tolerance 30 minut: Kolize je to jen tehdy,
+                                            // pokud je překryv delší než 30 minut.
+                                            long tolerance = 30;
+                                            return startA.isBefore(endB.minusMinutes(tolerance)) &&
+                                                    startB.isBefore(endA.minusMinutes(tolerance));
+                                        });
+
                                 return AssignedUserDto.builder()
-                                        .userId(sa.getEmployee().getId())
+                                        .userId(currentEmpId)
                                         .name((sa.getEmployee().getFirstName() != null ? sa.getEmployee().getFirstName() : "") + " " +
                                                 (sa.getEmployee().getLastName() != null ? sa.getEmployee().getLastName() : ""))
+                                        .isCollision(hasCollision)
                                         .build();
                             } catch (EntityNotFoundException e) {
-                                // Uživatel neexistuje, NESMÍME už použít sa.getEmployee() vůbec k ničemu!
+                                // Ochrana: uživatel byl smazán, vracíme placeholder bez sahání na smazanou entitu
                                 return AssignedUserDto.builder()
-                                        .userId(null) // <--- FINÁLNÍ OPRAVA ZDE
+                                        .userId(null)
                                         .name("Smazaný uživatel")
+                                        .isCollision(false)
                                         .build();
                             }
                         }, Collectors.toList())

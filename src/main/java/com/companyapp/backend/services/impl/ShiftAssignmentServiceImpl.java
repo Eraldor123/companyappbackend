@@ -14,7 +14,6 @@ import com.companyapp.backend.services.dto.response.ShiftAssignmentDto;
 import com.companyapp.backend.services.exception.AvailabilityNotProvidedException;
 import com.companyapp.backend.services.exception.CapacityExceededException;
 import com.companyapp.backend.services.exception.ResourceNotFoundException;
-import com.companyapp.backend.services.exception.ShiftCollisionException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,7 +33,7 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
     private final ShiftAssignmentRepository shiftAssignmentRepository;
     private final AvailabilityRepository availabilityRepository;
     private final QualificationService qualificationService;
-    private final AuditLogService auditLogService; // PŘIDÁNO: Záznam do auditu
+    private final AuditLogService auditLogService;
 
     private final static String entityName = "ShiftAssignment";
 
@@ -60,21 +59,9 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
             throw new AvailabilityNotProvidedException("Zaměstnanec nemá nahlášenou dostupnost na tento den.");
         }
 
-        LocalDateTime checkStart = shift.getStartTime().toLocalDateTime().plusMinutes(35);
-        LocalDateTime checkEnd = shift.getEndTime().toLocalDateTime().minusMinutes(35);
-
-        if (checkStart.isAfter(checkEnd)) {
-            checkStart = shift.getStartTime().toLocalDateTime().plusMinutes(1);
-            checkEnd = shift.getEndTime().toLocalDateTime().minusMinutes(1);
-        }
-
-        long overlappingCount = shiftAssignmentRepository.countOverlappingShifts(
-                userId, checkStart, checkEnd
-        );
-
-        if (overlappingCount > 0) {
-            throw new ShiftCollisionException("Zaměstnanec již v tomto čase má jinou směnu (překryv je příliš velký).");
-        }
+        // TADY BYLA PŘÍSNÁ BLOKACE PŘEKRYVU SMĚN - Byla odstraněna, aby manažer
+        // mohl (v případě potřeby) přiřadit uživatele na více stanovišť ve stejný čas.
+        // Varování na kolizi nyní řeší frontend pomocí ScheduleControlleru.
 
         ShiftAssignment assignment = new ShiftAssignment();
         assignment.setShift(shift);

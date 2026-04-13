@@ -2,6 +2,7 @@ package com.companyapp.backend.config;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -30,17 +31,33 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
 
-        final String authHeader = request.getHeader("Authorization");
-        final String jwt;
-        final String userEmail;
+        String jwt = null;
 
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        // 1. POKUS: Najít JWT token v bezpečné Cookie (pro Web)
+        if (request.getCookies() != null) {
+            for (Cookie cookie : request.getCookies()) {
+                if ("jwt".equals(cookie.getName())) {
+                    jwt = cookie.getValue();
+                    break;
+                }
+            }
+        }
+
+        // 2. POKUS: Fallback na klasickou hlavičku (pro Terminál nebo starší přístupy)
+        if (jwt == null) {
+            final String authHeader = request.getHeader("Authorization");
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                jwt = authHeader.substring(7);
+            }
+        }
+
+        // Pokud token vůbec nemáme, jdeme dál bez přihlášení (vyhodí to Error 403 na chráněných koncových bodech)
+        if (jwt == null) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        jwt = authHeader.substring(7);
-        userEmail = jwtService.extractUsername(jwt);
+        final String userEmail = jwtService.extractUsername(jwt);
 
         if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);

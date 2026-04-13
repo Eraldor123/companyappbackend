@@ -26,4 +26,14 @@ public class AvailabilityDTO {
 
     @JsonProperty("isConfirmed")
     private boolean isConfirmed;
+
+    // --- NOVÉ POLOŽKY PRO PŮLDENNÍ SMĚNY ---
+    @JsonProperty("hasMorningShift")
+    private boolean hasMorningShift;
+
+    @JsonProperty("hasAfternoonShift")
+    private boolean hasAfternoonShift;
+
+    @JsonProperty("shiftDetails")
+    private String shiftDetails;
 }
