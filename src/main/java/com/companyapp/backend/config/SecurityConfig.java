@@ -30,14 +30,15 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Zapnutí CORS
-                .csrf(csrf -> csrf.disable()) // Vypnutí CSRF, pro JWT není potřeba
+                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Zapnutí CORS s naší konfigurací
+                .csrf(csrf -> csrf.disable()) // Pro JWT/Stateless aplikaci vypnuto
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**", "/api/v1/terminal/auth").permitAll() // Přihlášení je dostupné všem
+                        // PŘIDÁNO: /api/v1/users/verify je nyní permitAll, aby neházel chybu 403 v tichosti
+                        .requestMatchers("/api/v1/auth/**", "/api/v1/terminal/auth", "/api/v1/users/verify").permitAll()
                         .anyRequest().authenticated() // Všechny ostatní endpointy vyžadují token
                 )
-                .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // Žádné sessions, jen tokeny
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class); // Přidání našeho JWT filtru
+                .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // Žádné sessions
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class); // Váš JWT filtr
 
         return http.build();
     }
@@ -62,17 +63,20 @@ public class SecurityConfig {
         };
     }
 
-    // Nastavení CORS (Povolení pro frontend, např. React na localhost:3000 nebo Vite na 5173)
-    // Nastavení CORS (Povolení pro frontend, např. React na localhost:3000 nebo Vite na 5173)
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
+
+        // Specifikujte přesné adresy vašeho frontendu (localhost:3000 nebo Vite 5173)
+        // Hvězdička "*" nesmí být použita společně s AllowCredentials(true)
         configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173"));
+
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
 
-        // TADY JE OPRAVA: Místo vyjmenovávání konkrétních hlaviček povolíme všechny pomocí "*"
+        // Povolíme všechny hlavičky
         configuration.setAllowedHeaders(List.of("*"));
 
+        // KLÍČOVÉ PRO HttpOnly COOKIES: Povolí prohlížeči odesílat credentials (cookies)
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
