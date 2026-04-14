@@ -22,7 +22,12 @@ public class PasswordResetToken {
     @Column(nullable = false, unique = true)
     private String token;
 
-    @OneToOne(targetEntity = User.class, fetch = FetchType.EAGER)
+    /**
+     * FÁZE 2: Oprava N+1 problému.
+     * Změněno z EAGER na LAZY. Uživatel se načte pouze v případě,
+     * že skutečně dojde k potvrzení resetu hesla.
+     */
+    @OneToOne(targetEntity = User.class, fetch = FetchType.LAZY)
     @JoinColumn(nullable = false, name = "user_id")
     private User user;
 

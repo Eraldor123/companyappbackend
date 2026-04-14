@@ -10,6 +10,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -23,17 +24,20 @@ public class TerminalAuthenticationServiceImpl implements TerminalAuthentication
     @Override
     @Transactional(readOnly = true)
     public UUID authenticateTerminal(String rawPin) {
-        // Zahashujeme zadaný PIN z terminálu
-        String hashedPin = passwordEncoder.encode(rawPin);
+        // Načteme aktivní lidi (pro desítky zaměstnanců je to bleskové)
+        List<User> activeUsers = userRepository.findAll().stream()
+                .filter(User::getIsActive)
+                .toList();
 
-        // Najdeme uživatele rovnou podle hashe (v User.java už máš @Column(unique = true))
-        User user = userRepository.findByPinAndIsActiveTrue(hashedPin)
-                .orElseThrow(() -> {
-                    log.warn("Neúspěšný pokus o přihlášení na terminálu. Nesprávný PIN.");
-                    return new InvalidPinException("Zadaný PIN je nesprávný.");
-                });
+        for (User user : activeUsers) {
+            // passwordEncoder.matches je jediná správná cesta pro BCrypt
+            if (passwordEncoder.matches(rawPin, user.getPin())) {
+                log.info("Uživatel s ID {} se úspěšně autorizoval na terminálu.", user.getId());
+                return user.getId();
+            }
+        }
 
-        log.info("Uživatel s ID {} se úspěšně autorizoval na terminálu.", user.getId());
-        return user.getId();
+        log.warn("Neúspěšný pokus o přihlášení na terminálu. Nesprávný PIN.");
+        throw new InvalidPinException("Zadaný PIN je nesprávný.");
     }
 }

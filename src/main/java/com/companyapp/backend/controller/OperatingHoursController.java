@@ -7,6 +7,7 @@ import com.companyapp.backend.services.dto.request.StandardHoursDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize; // PŘIDANÝ IMPORT
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -38,6 +39,7 @@ public class OperatingHoursController {
     }
 
     @PutMapping("/standard")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGEMENT')") // ZABEZPEČENO
     public ResponseEntity<Void> updateStandardHours(@RequestBody StandardHoursDto dto) {
         operatingHoursService.updateStandardHours(dto);
         return ResponseEntity.ok().build();
@@ -50,6 +52,7 @@ public class OperatingHoursController {
     }
 
     @PutMapping("/pause-rule")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGEMENT')") // ZABEZPEČENO
     public ResponseEntity<Void> updatePauseRule(@RequestBody PauseRuleDto dto) {
         operatingHoursService.updatePauseRule(dto);
         return ResponseEntity.ok().build();
@@ -62,12 +65,14 @@ public class OperatingHoursController {
     }
 
     @PostMapping("/seasons")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGEMENT')") // ZABEZPEČENO
     public ResponseEntity<Void> createSeason(@RequestBody SeasonalRegimeDto dto) {
         operatingHoursService.saveSeason(dto);
         return ResponseEntity.ok().build();
     }
 
     @PutMapping("/seasons/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGEMENT')") // ZABEZPEČENO
     public ResponseEntity<Void> updateSeason(@PathVariable Integer id, @RequestBody SeasonalRegimeDto dto) {
         dto.setId(id);
         operatingHoursService.saveSeason(dto);
@@ -75,6 +80,7 @@ public class OperatingHoursController {
     }
 
     @DeleteMapping("/seasons/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGEMENT')") // ZABEZPEČENO
     public ResponseEntity<Void> deleteSeason(@PathVariable Integer id) {
         operatingHoursService.deleteSeason(id);
         return ResponseEntity.noContent().build();

@@ -18,7 +18,10 @@ import java.util.function.Function;
 @Service
 public class JwtService {
 
-    // PŘIDÁNO: Spring si nyní tuto hodnotu vytáhne z application.properties
+    /**
+     * FÁZE 1: Skrytí Secrets splněno.
+     * Hodnota není v kódu, ale je injektována Springem z bezpečného zdroje.
+     */
     @Value("${security.jwt.secret-key}")
     private String secretKey;
 
@@ -36,26 +39,22 @@ public class JwtService {
     }
 
     public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
-
         // Výchozí platnost: 24 hodin
         long expirationTime = 1000L * 60 * 60 * 24;
-        // long expirationTime = 1000L; // odkomentuj pro testování expirace
 
         // Zjistíme, zda se hlásí terminál
         boolean isTerminal = userDetails.getAuthorities().stream()
                 .anyMatch(authority -> authority.getAuthority().equals("ROLE_TERMINAL"));
 
         if (isTerminal) {
-            // Platnost: 10 let (přibližně)
+            // Platnost pro terminál: 10 let
             expirationTime = 1000L * 60 * 60 * 24 * 365 * 10;
-            // expirationTime = 1000L; // odkomentuj pro testování expirace terminálu
         }
 
         return Jwts.builder()
                 .setClaims(extraClaims)
                 .setSubject(userDetails.getUsername())
                 .setIssuedAt(new Date(System.currentTimeMillis()))
-                // Zde aplikujeme naši proměnnou expirationTime
                 .setExpiration(new Date(System.currentTimeMillis() + expirationTime))
                 .signWith(getSignInKey(), SignatureAlgorithm.HS256)
                 .compact();
@@ -83,7 +82,7 @@ public class JwtService {
     }
 
     private Key getSignInKey() {
-        // UPRAVENO: Používáme instanční proměnnou secretKey místo statické konstanty
+        // Načtení klíče z proměnné secretKey, která je v produkci naplněna z Environment Variable
         byte[] keyBytes = Decoders.BASE64.decode(secretKey);
         return Keys.hmacShaKeyFor(keyBytes);
     }

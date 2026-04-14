@@ -3,11 +3,13 @@ package com.companyapp.backend.controller;
 import com.companyapp.backend.services.FacilityManagementService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/facilities")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('ADMIN', 'MANAGEMENT')")
 public class FacilityManagementController {
 
     private final FacilityManagementService facilityManagementService;

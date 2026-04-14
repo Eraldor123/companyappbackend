@@ -15,11 +15,22 @@ import java.math.BigDecimal;
 public class PauseRule {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    /**
+     * FÁZE 2: Optimalizace transakcí u generátorů ID.
+     * Změna z IDENTITY na SEQUENCE pro podporu batchingu v Hibernate 6.
+     * allocationSize = 50 zajišťuje, že se ID nepoptávají v DB po jednom, ale berou se z paměťového poolu.
+     */
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "pause_rule_seq")
+    @SequenceGenerator(
+            name = "pause_rule_seq",
+            sequenceName = "pause_rule_id_seq",
+            allocationSize = 50
+    )
     private Integer id;
 
     /**
-     * Práh v hodinách, po kterém se má pauza spustit. Například 4.5 znamená, že pauza se spustí po 4 hodinách a 30 minutách práce.
+     * Práh v hodinách, po kterém se má pauza spustit.
+     * Například 4.5 znamená, že pauza se spustí po 4 hodinách a 30 minutách práce.
      */
     @Column(name = "trigger_hours", precision = 4, scale = 2)
     private BigDecimal triggerHours;
@@ -35,7 +46,7 @@ public class PauseRule {
         if (this == o) return true;
         if (!(o instanceof PauseRule)) return false;
         PauseRule that = (PauseRule) o;
-        return id!= null && id.equals(that.getId());
+        return id != null && id.equals(that.getId());
     }
 
     @Override

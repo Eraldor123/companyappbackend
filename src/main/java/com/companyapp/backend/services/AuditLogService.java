@@ -1,9 +1,10 @@
 package com.companyapp.backend.services;
-import com.companyapp.backend.entity.AuditLog;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import com.companyapp.backend.services.dto.response.AuditLogDto;
 
-import java.util.List;
 public interface AuditLogService {
     void logAction(String action, String entityName, String entityId, String details);
-
-    List<AuditLog> getAllLogs();
+    // ZMĚNĚNO: Vracíme DTO místo entity
+    Page<AuditLogDto> getAllLogs(Pageable pageable);
 }

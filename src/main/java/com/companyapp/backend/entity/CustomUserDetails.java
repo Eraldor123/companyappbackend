@@ -9,9 +9,12 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Wrapper nad entitou User pro Spring Security.
+ * Ukládá si pouze nezbytná data v paměti, aby se předešlo problémům s Hibernate session.
+ */
 public class CustomUserDetails implements UserDetails {
 
-    // Ukládáme si pouze "čisté" textové hodnoty, NE celou databázovou entitu
     private final UUID id;
     private final String username;
     private final String password;
@@ -19,21 +22,26 @@ public class CustomUserDetails implements UserDetails {
     private final List<GrantedAuthority> authorities;
 
     public CustomUserDetails(User user) {
-        // Hned při vytvoření si vyzobeme potřebná data a entitu "user" zahodíme
         this.id = user.getId();
         this.username = user.getEmail();
-        this.password = user.getPasswordHash(); // Použito tvé getPasswordHash()
+        // ZMĚNA: Použij standardní getter, který ti vrací heslo z DB (již v BCryptu)
+        this.password = user.getPassword();
         this.isActive = user.getIsActive();
+        // ... zbytek kódu ...
 
-        // Převedeme role a uložíme je do paměti (odstřiženo od Hibernate)
+
+        // Převedeme AccessLevel enumy na GrantedAuthority pro Spring Security
         this.authorities = user.getRoles().stream()
                 .map(role -> new SimpleGrantedAuthority("ROLE_" + role.name()))
                 .collect(Collectors.toList());
     }
 
-    // PŘIDÁNO PRO BEZPEČNOSTNÍ KONTROLY (IDOR)
+    /**
+     * Klíčová metoda pro náš bezpečnostní aspekt @CheckOwnership (IDOR ochrana).
+     * Umožňuje nám porovnat ID v requestu s ID přihlášeného uživatele.
+     */
     public UUID getId() {
-        return id; // Vracíme přímo zkopírované UUID
+        return id;
     }
 
     @Override
@@ -52,14 +60,22 @@ public class CustomUserDetails implements UserDetails {
     }
 
     @Override
-    public boolean isAccountNonExpired() { return true; }
+    public boolean isAccountNonExpired() {
+        return true;
+    }
 
     @Override
-    public boolean isAccountNonLocked() { return isActive; }
+    public boolean isAccountNonLocked() {
+        return isActive; // Pokud není uživatel aktivní, účet je zamčený
+    }
 
     @Override
-    public boolean isCredentialsNonExpired() { return true; }
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
 
     @Override
-    public boolean isEnabled() { return isActive; }
+    public boolean isEnabled() {
+        return isActive;
+    }
 }

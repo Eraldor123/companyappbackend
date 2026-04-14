@@ -7,7 +7,7 @@ import com.companyapp.backend.repository.ShiftAssignmentRepository;
 import com.companyapp.backend.repository.ShiftRepository;
 import com.companyapp.backend.repository.ShiftTemplateRepository;
 import com.companyapp.backend.repository.StationRepository;
-import com.companyapp.backend.services.AuditLogService; // PŘIDÁNO
+import com.companyapp.backend.services.AuditLogService;
 import com.companyapp.backend.services.OperatingHoursService;
 import com.companyapp.backend.services.ShiftGenerationService;
 import com.companyapp.backend.services.dto.request.CreateCustomShiftRequestDto;
@@ -37,11 +37,15 @@ public class ShiftGenerationServiceImpl implements ShiftGenerationService {
     private final OperatingHoursService operatingHoursService;
     private final ShiftAssignmentRepository shiftAssignmentRepository;
     private final StationRepository stationRepository;
-    private final AuditLogService auditLogService; // PŘIDÁNO
+    private final AuditLogService auditLogService;
 
     @Override
     @Transactional
-    public List<Object> generateShiftsFromTemplate(LocalDate startDate, LocalDate endDate, Integer templateId) {
+    /**
+     * FÁZE 3: Oprava návratového typu na List<ShiftDto>.
+     * Odstraňuje přetypování na Object a zajišťuje typovou bezpečnost.
+     */
+    public List<ShiftDto> generateShiftsFromTemplate(LocalDate startDate, LocalDate endDate, Integer templateId) {
         log.info("Generuji směny ze šablony {} od {} do {}", templateId, startDate, endDate);
 
         ShiftTemplate template = shiftTemplateRepository.findById(templateId)
@@ -73,24 +77,30 @@ public class ShiftGenerationServiceImpl implements ShiftGenerationService {
         }
 
         if (newShifts.isEmpty()) {
-            log.warn("Nebyly vygenerovány žádné směny. Zkontrolujte časy v šabloně nebo nastavení provozu areálu.");
+            log.warn("Nebyly vygenerovány žádné směny. Zkontrolujte časy v šabloně.");
         } else {
             shiftRepository.saveAll(newShifts);
             log.info("Vygenerováno {} nových směn.", newShifts.size());
 
-            // ZÁZNAM DO AUDITU
             auditLogService.logAction(
                     "GENERATE_SHIFTS_TEMPLATE",
                     "Shift",
                     "Template_" + templateId,
-                    "Hromadně vygenerováno " + newShifts.size() + " směn pro období od " + startDate + " do " + endDate + " ze šablony '" + template.getName() + "'."
+                    "Hromadně vygenerováno " + newShifts.size() + " směn ze šablony '" + template.getName() + "'."
             );
         }
 
-        return newShifts.stream().map(s -> (Object) ShiftDto.builder()
+        // FÁZE 3: Přímé mapování na ShiftDto bez použití castu na Object
+        return newShifts.stream().map(s -> ShiftDto.builder()
                 .id(s.getId())
+                .stationId(s.getStation().getId())
                 .stationName(s.getStation().getName())
+                .templateId(s.getTemplate() != null ? s.getTemplate().getId() : null)
+                .templateName(s.getTemplate() != null ? s.getTemplate().getName() : null)
                 .shiftDate(s.getShiftDate())
+                .startTime(s.getStartTime())
+                .endTime(s.getEndTime())
+                .requiredCapacity(s.getRequiredCapacity())
                 .build()).collect(Collectors.toList());
     }
 
@@ -138,14 +148,12 @@ public class ShiftGenerationServiceImpl implements ShiftGenerationService {
         }
 
         shiftRepository.saveAll(newShifts);
-        log.info("Úspěšně zkopírováno {} směn do nového týdne.", newShifts.size());
 
-        // ZÁZNAM DO AUDITU
         auditLogService.logAction(
                 "COPY_WEEK_SCHEDULE",
                 "Shift",
                 "Week_" + targetWeekStart,
-                "Zkopírován kompletní týden směn (celkem " + newShifts.size() + "). Zdrojový týden: " + sourceWeekStart + ", Cílový týden: " + targetWeekStart + "."
+                "Zkopírován kompletní týden směn (celkem " + newShifts.size() + ")."
         );
     }
 
@@ -155,21 +163,17 @@ public class ShiftGenerationServiceImpl implements ShiftGenerationService {
         log.warn("Mažu všechny směny a přiřazení od {} do {}", startDate, endDate);
 
         var assignments = shiftAssignmentRepository.findByShiftDateBetween(startDate, endDate);
-        int assignmentsCount = assignments.size();
         shiftAssignmentRepository.deleteAll(assignments);
 
         var shifts = shiftRepository.findByShiftDateBetween(startDate, endDate);
         int shiftsCount = shifts.size();
         shiftRepository.deleteAll(shifts);
 
-        log.info("Smazáno {} přiřazení a {} směn.", assignmentsCount, shiftsCount);
-
-        // ZÁZNAM DO AUDITU
         auditLogService.logAction(
                 "CLEAR_WEEK_SCHEDULE",
                 "Shift",
                 "Range_" + startDate + "_to_" + endDate,
-                "Hromadné smazání plánu. Smazáno " + shiftsCount + " směn a zrušeno " + assignmentsCount + " přiřazení v období od " + startDate + " do " + endDate + "."
+                "Hromadné smazání plánu. Smazáno " + shiftsCount + " směn."
         );
     }
 
@@ -185,40 +189,28 @@ public class ShiftGenerationServiceImpl implements ShiftGenerationService {
         LocalDate currentDate = request.getStartDate();
 
         while (!currentDate.isAfter(request.getEndDate())) {
-
             if (Boolean.TRUE.equals(request.getUseOpeningHours())) {
                 DailyHoursDto dailyHours = (DailyHoursDto) operatingHoursService.getOperatingHoursForDate(currentDate);
 
                 if (Boolean.TRUE.equals(request.getHasDopo()) && dailyHours.getDopoStart() != null && dailyHours.getDopoEnd() != null) {
-                    Shift s = createCustomShiftObj(station, currentDate, LocalTime.parse(dailyHours.getDopoStart()), LocalTime.parse(dailyHours.getDopoEnd()), request.getRequiredCapacity(), request.getDescription());
-                    newShifts.add(s);
+                    newShifts.add(createCustomShiftObj(station, currentDate, LocalTime.parse(dailyHours.getDopoStart()), LocalTime.parse(dailyHours.getDopoEnd()), request.getRequiredCapacity(), request.getDescription()));
                 }
                 if (Boolean.TRUE.equals(request.getHasOdpo()) && dailyHours.getOdpoStart() != null && dailyHours.getOdpoEnd() != null) {
-                    Shift s = createCustomShiftObj(station, currentDate, LocalTime.parse(dailyHours.getOdpoStart()), LocalTime.parse(dailyHours.getOdpoEnd()), request.getRequiredCapacity(), request.getDescription());
-                    newShifts.add(s);
+                    newShifts.add(createCustomShiftObj(station, currentDate, LocalTime.parse(dailyHours.getOdpoStart()), LocalTime.parse(dailyHours.getOdpoEnd()), request.getRequiredCapacity(), request.getDescription()));
                 }
             } else if (request.getStartTime() != null && request.getEndTime() != null) {
-                LocalTime start = LocalTime.parse(request.getStartTime());
-                LocalTime end = LocalTime.parse(request.getEndTime());
-                Shift s = createCustomShiftObj(station, currentDate, start, end, request.getRequiredCapacity(), request.getDescription());
-                newShifts.add(s);
+                newShifts.add(createCustomShiftObj(station, currentDate, LocalTime.parse(request.getStartTime()), LocalTime.parse(request.getEndTime()), request.getRequiredCapacity(), request.getDescription()));
             }
-
             currentDate = currentDate.plusDays(1);
         }
 
-        if (newShifts.isEmpty()) {
-            log.warn("Nebyly vygenerovány žádné vlastní směny. Zkontrolujte zadání.");
-        } else {
+        if (!newShifts.isEmpty()) {
             shiftRepository.saveAll(newShifts);
-            log.info("Vygenerováno {} vlastních směn.", newShifts.size());
-
-            // ZÁZNAM DO AUDITU
             auditLogService.logAction(
                     "GENERATE_CUSTOM_SHIFTS",
                     "Shift",
                     "Custom_" + station.getName(),
-                    "Vygenerováno " + newShifts.size() + " vlastních směn pro stanoviště '" + station.getName() + "' v období od " + request.getStartDate() + " do " + request.getEndDate() + "."
+                    "Vygenerováno " + newShifts.size() + " vlastních směn."
             );
         }
     }
@@ -226,7 +218,6 @@ public class ShiftGenerationServiceImpl implements ShiftGenerationService {
     private Shift createCustomShiftObj(Station station, LocalDate date, LocalTime start, LocalTime end, Integer capacity, String description) {
         Shift shift = new Shift();
         shift.setStation(station);
-        shift.setTemplate(null);
         shift.setShiftDate(date);
         shift.setDescription(description);
 

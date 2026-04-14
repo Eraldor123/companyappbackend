@@ -18,7 +18,17 @@ import java.time.LocalTime;
 public class SeasonalRegime {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    /**
+     * FÁZE 2: Optimalizace transakcí u generátorů ID.
+     * Změna z IDENTITY na SEQUENCE pro podporu batchingu v Hibernate 6.
+     * allocationSize = 50 zajišťuje, že se ID nepoptávají v DB po jednom, ale berou se z paměťového poolu.
+     */
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "seasonal_regime_seq")
+    @SequenceGenerator(
+            name = "seasonal_regime_seq",
+            sequenceName = "seasonal_regime_id_seq",
+            allocationSize = 50
+    )
     private Integer id;
 
     @NotBlank

@@ -15,7 +15,17 @@ import lombok.Setter;
 public class MainCategory {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    /**
+     * FÁZE 2: Optimalizace transakcí u generátorů ID.
+     * Změna z IDENTITY na SEQUENCE pro podporu batchingu v Hibernate 6.
+     * allocationSize = 50 zajišťuje, že se ID nepoptávají v DB po jednom, což šetří výkon.
+     */
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "main_category_seq")
+    @SequenceGenerator(
+            name = "main_category_seq",
+            sequenceName = "main_category_id_seq",
+            allocationSize = 50
+    )
     private Integer id;
 
     @NotBlank(message = "Název kategorie nesmí být prázdný.")

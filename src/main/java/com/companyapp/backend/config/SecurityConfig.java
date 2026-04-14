@@ -1,6 +1,5 @@
 package com.companyapp.backend.config;
 
-import com.companyapp.backend.HashUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,6 +9,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder; // PŘIDÁNO
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -30,15 +30,19 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Zapnutí CORS s naší konfigurací
-                .csrf(csrf -> csrf.disable()) // Pro JWT/Stateless aplikaci vypnuto
-                .authorizeHttpRequests(auth -> auth
-                        // PŘIDÁNO: /api/v1/users/verify je nyní permitAll, aby neházel chybu 403 v tichosti
-                        .requestMatchers("/api/v1/auth/**", "/api/v1/terminal/auth", "/api/v1/users/verify").permitAll()
-                        .anyRequest().authenticated() // Všechny ostatní endpointy vyžadují token
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(csrf -> csrf.disable())
+                // Ochrana proti Clickjackingu a základní CSP
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.deny())
+                        .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'self'"))
                 )
-                .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // Žádné sessions
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class); // Váš JWT filtr
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/v1/auth/**", "/api/v1/terminal/auth", "/api/v1/users/verify").permitAll()
+                        .anyRequest().authenticated()
+                )
+                .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -48,36 +52,35 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 
+    /**
+     * OPRAVA: Použití BCrypt namísto SHA-256.
+     * BCrypt automaticky generuje unikátní sůl pro každé heslo a je výpočetně náročný,
+     * což chrání uživatele i při úniku databáze.
+     */
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new PasswordEncoder() {
-            @Override
-            public String encode(CharSequence rawPassword) {
-                return HashUtil.hash(rawPassword.toString());
-            }
-
-            @Override
-            public boolean matches(CharSequence rawPassword, String encodedPassword) {
-                return HashUtil.hash(rawPassword.toString()).equals(encodedPassword);
-            }
-        };
+        return new BCryptPasswordEncoder();
     }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // Specifikujte přesné adresy vašeho frontendu (localhost:3000 nebo Vite 5173)
-        // Hvězdička "*" nesmí být použita společně s AllowCredentials(true)
         configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173"));
-
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
 
-        // Povolíme všechny hlavičky
-        configuration.setAllowedHeaders(List.of("*"));
+        // Povolení nezbytných hlaviček včetně Cache-Control pro frontend
+        configuration.setAllowedHeaders(List.of(
+                "Authorization",
+                "Content-Type",
+                "X-Requested-With",
+                "Accept",
+                "Origin",
+                "Cache-Control"
+        ));
 
-        // KLÍČOVÉ PRO HttpOnly COOKIES: Povolí prohlížeči odesílat credentials (cookies)
         configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L); // Cache na CORS rozhodnutí (1 hodina)
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

@@ -1,5 +1,6 @@
 package com.companyapp.backend.services.dto.request;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import java.time.LocalDate;
@@ -20,6 +21,7 @@ public class CreateCustomShiftRequestDto {
     private String endTime;
 
     @NotNull(message = "Kapacita je povinná.")
+    @Min(value = 1, message = "Kapacita směny musí být alespoň 1.")
     private Integer requiredCapacity;
 
     // --- NOVÉ BOLEANY PRO OTEVÍRACÍ DOBU ---

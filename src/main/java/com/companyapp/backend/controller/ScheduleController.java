@@ -2,6 +2,7 @@ package com.companyapp.backend.controller;
 
 import com.companyapp.backend.entity.Shift;
 import com.companyapp.backend.entity.ShiftAssignment;
+import com.companyapp.backend.entity.User;
 import com.companyapp.backend.repository.AvailabilityRepository;
 import com.companyapp.backend.repository.ShiftAssignmentRepository;
 import com.companyapp.backend.repository.ShiftRepository;
@@ -14,6 +15,9 @@ import com.companyapp.backend.services.dto.response.PlannerUserDto;
 import com.companyapp.backend.services.dto.response.ScheduleShiftDto;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page; // PŘIDÁNO
+import org.springframework.data.domain.Pageable; // PŘIDÁNO
+import org.springframework.data.web.PageableDefault; // PŘIDÁNO
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -61,10 +65,10 @@ public class ScheduleController {
         }
         response.put("days", days);
 
+        // FÁZE 2: Využívá optimalizované findByShiftDateBetween s EntityGraph v ShiftRepository
         List<Shift> rawShifts = shiftRepository.findByShiftDateBetween(startDate, endDate);
         List<ShiftAssignment> rawAssignments = shiftAssignmentRepository.findByShiftDateBetween(startDate, endDate);
 
-        // Mapování přiřazení s detekcí kolizí a ochranou proti smazaným uživatelům
         Map<UUID, List<AssignedUserDto>> assignmentsByShift = rawAssignments.stream()
                 .filter(sa -> sa.getShift() != null && sa.getEmployee() != null)
                 .collect(Collectors.groupingBy(
@@ -76,17 +80,13 @@ public class ScheduleController {
                                 LocalTime endA = sa.getEndTime().toLocalTime();
                                 LocalDate dateA = sa.getShift().getShiftDate();
 
-                                // Logika detekce kolize s 30min tolerancí
                                 boolean hasCollision = rawAssignments.stream()
-                                        .filter(other -> !other.getId().equals(sa.getId())) // neporovnávat se sebou
+                                        .filter(other -> !other.getId().equals(sa.getId()))
                                         .filter(other -> other.getEmployee() != null && other.getEmployee().getId().equals(currentEmpId))
                                         .filter(other -> other.getShift() != null && other.getShift().getShiftDate().equals(dateA))
                                         .anyMatch(other -> {
                                             LocalTime startB = other.getStartTime().toLocalTime();
                                             LocalTime endB = other.getEndTime().toLocalTime();
-
-                                            // Tolerance 30 minut: Kolize je to jen tehdy,
-                                            // pokud je překryv delší než 30 minut.
                                             long tolerance = 30;
                                             return startA.isBefore(endB.minusMinutes(tolerance)) &&
                                                     startB.isBefore(endA.minusMinutes(tolerance));
@@ -99,7 +99,6 @@ public class ScheduleController {
                                         .isCollision(hasCollision)
                                         .build();
                             } catch (EntityNotFoundException e) {
-                                // Ochrana: uživatel byl smazán, vracíme placeholder bez sahání na smazanou entitu
                                 return AssignedUserDto.builder()
                                         .userId(null)
                                         .name("Smazaný uživatel")
@@ -111,11 +110,8 @@ public class ScheduleController {
 
         List<ScheduleShiftDto> shifts = rawShifts.stream()
                 .filter(s -> {
-                    try {
-                        return s.getStation() != null && s.getStation().getName() != null;
-                    } catch (EntityNotFoundException e) {
-                        return false; // Stanice byla smazána
-                    }
+                    try { return s.getStation() != null && s.getStation().getName() != null; }
+                    catch (EntityNotFoundException e) { return false; }
                 })
                 .map(s -> ScheduleShiftDto.builder()
                         .id(s.getId())
@@ -134,39 +130,40 @@ public class ScheduleController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * FÁZE 2: Implementace stránkování u seznamu dostupných uživatelů.
+     * Metoda nyní přijímá Pageable a vrací Page<PlannerUserDto>, což je nezbytné pro výkon.
+     */
     @GetMapping("/available-users")
-    public ResponseEntity<List<PlannerUserDto>> getAvailableUsersForWeek(
+    public ResponseEntity<Page<PlannerUserDto>> getAvailableUsersForWeek(
             @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+            @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @PageableDefault(size = 20) Pageable pageable) {
 
         List<com.companyapp.backend.entity.Availability> availabilities = availabilityRepository.findByDateRange(startDate, endDate);
-
-        List<java.util.UUID> userIds = availabilities.stream()
+        List<UUID> userIdsWhoHaveAvailability = availabilities.stream()
                 .map(com.companyapp.backend.entity.Availability::getUserId)
                 .distinct()
                 .collect(Collectors.toList());
 
-        if (userIds.isEmpty()) {
-            return ResponseEntity.ok(new ArrayList<>());
-        }
-
-        List<com.companyapp.backend.entity.User> activeUsers = userRepository.findAllActiveUsersWithDetails().stream()
-                .filter(u -> userIds.contains(u.getId()))
-                .collect(Collectors.toList());
+        // Volání UserRepository, který byl v předchozím kroku upraven na Page<User>
+        Page<User> activeUsersPage = userRepository.findAllActiveUsersWithDetails(pageable);
 
         LocalDate monthStart = startDate.withDayOfMonth(1);
         LocalDate monthEnd = startDate.withDayOfMonth(startDate.lengthOfMonth());
-        List<ShiftAssignment> monthAssignments = shiftAssignmentRepository.findAssignmentsForUsersInDateRange(userIds, monthStart, monthEnd);
+        List<ShiftAssignment> monthAssignments = shiftAssignmentRepository.findAssignmentsForUsersInDateRange(
+                activeUsersPage.getContent().stream().map(User::getId).collect(Collectors.toList()),
+                monthStart, monthEnd);
+
         java.time.LocalDateTime now = java.time.LocalDateTime.now(java.time.ZoneId.of("UTC"));
 
-        List<PlannerUserDto> result = new ArrayList<>();
+        Page<PlannerUserDto> resultPage = activeUsersPage.map(user -> {
+            // Logika filtrování: Pouze uživatelé s nahlášenou dostupností v tomto týdnu
+            if (!userIdsWhoHaveAvailability.contains(user.getId())) {
+                return null;
+            }
 
-        for (com.companyapp.backend.entity.User user : activeUsers) {
             List<Integer> qualifiedIds = user.getQualifiedStations().stream()
-                    .filter(st -> {
-                        try { return st != null && st.getName() != null; }
-                        catch(EntityNotFoundException e) { return false; }
-                    })
                     .map(com.companyapp.backend.entity.Station::getId)
                     .collect(Collectors.toList());
 
@@ -179,29 +176,23 @@ public class ScheduleController {
             int planned = 0;
             int completed = 0;
             for (ShiftAssignment sa : monthAssignments) {
-                try {
-                    if (sa.getEmployee() != null && sa.getEmployee().getId().equals(user.getId()) && sa.getEndTime() != null) {
-                        if (sa.getEndTime().isBefore(now)) {
-                            completed++;
-                        } else {
-                            planned++;
-                        }
-                    }
-                } catch (EntityNotFoundException e) {
-                    // Ignorujeme rozbité záznamy
+                if (sa.getEmployee() != null && sa.getEmployee().getId().equals(user.getId()) && sa.getEndTime() != null) {
+                    if (sa.getEndTime().isBefore(now)) completed++;
+                    else planned++;
                 }
             }
 
-            result.add(PlannerUserDto.builder()
+            return PlannerUserDto.builder()
                     .userId(user.getId())
-                    .name((user.getFirstName() != null ? user.getFirstName() : "") + " " + (user.getLastName() != null ? user.getLastName() : ""))
+                    .name(user.getFirstName() + " " + user.getLastName())
                     .qualifiedStationIds(qualifiedIds)
                     .weekAvailability(weekAvail)
                     .plannedShiftsThisMonth(planned)
                     .completedShiftsThisMonth(completed)
-                    .build());
-        }
-        return ResponseEntity.ok(result);
+                    .build();
+        });
+
+        return ResponseEntity.ok(resultPage);
     }
 
     @PostMapping("/auto-plan")

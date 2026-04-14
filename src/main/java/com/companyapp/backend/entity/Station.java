@@ -14,7 +14,17 @@ import lombok.Setter;
 public class Station {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    /**
+     * FÁZE 2: Optimalizace transakcí u generátorů ID.
+     * Změna z IDENTITY na SEQUENCE umožňuje Hibernate 6 používat dávkové vkládání.
+     * allocationSize = 50 zajišťuje, že se ID poptávají z DB v dávkách, nikoliv po jednom.
+     */
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "station_seq")
+    @SequenceGenerator(
+            name = "station_seq",
+            sequenceName = "station_id_seq",
+            allocationSize = 50
+    )
     private Integer id;
 
     /**
@@ -45,6 +55,7 @@ public class Station {
      */
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
+
     @Column(name = "sort_order")
     private Integer sortOrder = 1;
 
@@ -63,8 +74,5 @@ public class Station {
 
     public void setActive(boolean b) {
         this.isActive = b;
-
     }
-
-
 }

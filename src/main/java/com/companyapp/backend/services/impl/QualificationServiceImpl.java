@@ -13,6 +13,8 @@ import com.companyapp.backend.services.dto.response.EmployeeQualificationDto;
 import com.companyapp.backend.services.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,10 +36,12 @@ public class QualificationServiceImpl implements QualificationService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<EmployeeQualificationDto> getAllEmployeesWithStations() {
-        List<User> users = userRepository.findAllActiveUsersWithDetails();
+    public Page<EmployeeQualificationDto> getAllEmployeesWithStations(Pageable pageable) {
+        // 1. Získáme stránkované uživatele přímo z DB (vyžaduje update v UserRepository)
+        Page<User> userPage = userRepository.findAllActiveUsersWithDetails(pageable);
 
-        return users.stream().map(user -> {
+        // 2. Mapujeme stránku entit na stránku DTO
+        return userPage.map(user -> {
             UserProfile profile = user.getUserProfile();
             Contract contract = contractRepository.findLatestContractByUserId(user.getId()).orElse(null);
 
@@ -53,7 +57,7 @@ public class QualificationServiceImpl implements QualificationService {
                     .photoUrl(profile != null ? profile.getProfilePictureUrl() : "")
                     .qualifiedStationIds(stationIds)
                     .build();
-        }).collect(Collectors.toList());
+        });
     }
 
     @Override

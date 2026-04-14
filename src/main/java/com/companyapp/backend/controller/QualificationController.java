@@ -5,6 +5,8 @@ import com.companyapp.backend.services.dto.request.UpdateQualificationsRequestDt
 import com.companyapp.backend.services.dto.response.EmployeeQualificationDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -21,9 +23,10 @@ public class QualificationController {
     private final QualificationService qualificationService;
 
     @GetMapping("/employees")
-    public ResponseEntity<List<EmployeeQualificationDto>> getAllEmployeesWithQualifications() {
-        // Změněno na: getAllEmployeesWithStations()
-        return ResponseEntity.ok(qualificationService.getAllEmployeesWithStations());
+    public ResponseEntity<Page<EmployeeQualificationDto>> getAllEmployeesWithQualifications(
+            @org.springframework.data.web.PageableDefault(size = 15) Pageable pageable) {
+        // Frontend nyní může volat /api/v1/qualifications/employees?page=0&size=15
+        return ResponseEntity.ok(qualificationService.getAllEmployeesWithStations(pageable));
     }
 
     @PutMapping("/users/{userId}")

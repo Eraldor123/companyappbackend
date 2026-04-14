@@ -1,6 +1,5 @@
 package com.companyapp.backend.entity;
 
-import com.companyapp.backend.HashUtil;
 import com.companyapp.backend.enums.AccessLevel;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
@@ -11,6 +10,8 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.UUID;
 
 @Entity
@@ -33,40 +34,51 @@ public class User {
     @NotBlank(message = "PIN kód pro terminál je vyžadován.")
     @Column(name = "pin", nullable = false)
     private String pin;
-    // --- PŘIDÁNO: Nové heslo pro web ---
-    @Column(name = "password") // Zatím necháme nullable, pro případ starých dat
+
+    @Column(name = "password")
     private String password;
 
-    @ElementCollection(fetch = FetchType.EAGER)
+    /**
+     * FÁZE 2: Změněno z EAGER na LAZY.
+     * Role uživatele se nyní načtou pouze tehdy, když jsou skutečně potřeba.
+     */
+    @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false)
-    private java.util.Set<AccessLevel> roles = new java.util.HashSet<>();
+    private Set<AccessLevel> roles = new HashSet<>();
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 
-    // --- NAŠE PŘIDANÁ VAZBA NA STANOVIŠTĚ ---
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "user_qualified_stations",
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "station_id")
     )
-    private java.util.Set<Station> qualifiedStations = new java.util.HashSet<>();
+    private Set<Station> qualifiedStations = new HashSet<>();
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, optional = true)
+    /**
+     * FÁZE 2: Změněno na LAZY.
+     */
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, optional = true, fetch = FetchType.LAZY)
     private UserProfile userProfile;
+
+    /**
+     * FÁZE 2: Změněno na LAZY.
+     */
+    @OneToOne(mappedBy = "user", optional = true, fetch = FetchType.LAZY)
+    private PasswordResetToken passwordResetToken;
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof User)) return false;
-        User user = (User) o;
+        if (!(o instanceof User user)) return false;
         return id != null && id.equals(user.getId());
     }
 
@@ -80,13 +92,12 @@ public class User {
     }
 
     public boolean isActive() {
-        return this.isActive;
+        return Boolean.TRUE.equals(this.isActive);
     }
 
-    public String getPinHash() {
-        return HashUtil.hash(this.pin);
-    }
-    public String getPasswordHash() { return this.password; }
+    // Metody getPinHash() a getPasswordHash() byly odstraněny,
+    // protože jen mátly a využívaly starý HashUtil.
+    // Pro získání hashe nyní stačí standardní getPin() a getPassword().
 
     public String getLastName() {
         return userProfile != null ? userProfile.getLastName() : null;
@@ -94,16 +105,5 @@ public class User {
 
     public String getFirstName() {
         return userProfile != null ? userProfile.getFirstName() : null;
-    }
-
-    @OneToOne(mappedBy = "user", optional = true)
-    private PasswordResetToken passwordResetToken;
-
-    public PasswordResetToken getPasswordResetToken() {
-        return passwordResetToken;
-    }
-
-    public void setPasswordResetToken(PasswordResetToken passwordResetToken) {
-        this.passwordResetToken = passwordResetToken;
     }
 }

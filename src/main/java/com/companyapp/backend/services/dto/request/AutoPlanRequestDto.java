@@ -1,14 +1,23 @@
 package com.companyapp.backend.services.dto.request;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.Data;
 import java.time.LocalDate;
 
-@Data // Vygeneruje gettery, settery, toString atd.
+@Data
 public class AutoPlanRequestDto {
-    private int fairnessWeight;  // 0-100 (férovost k dříčům)
-    private int trainingWeight;  // 0-100 (míra zaučování)
+
+    @Min(value = 0, message = "Váha férovosti musí být minimálně 0.")
+    @Max(value = 100, message = "Váha férovosti nesmí přesáhnout 100.")
+    private int fairnessWeight;
+
+    @Min(value = 0, message = "Váha zaučování musí být minimálně 0.")
+    @Max(value = 100, message = "Váha zaučování nesmí přesáhnout 100.")
+    private int trainingWeight;
+
     private LocalDate startDate;
     private LocalDate endDate;
     private LocalDate targetDate;
-    private Integer categoryId;  // <--- PŘIDÁNO: Filtrování podle aktuální kategorie v UI
+    private Integer categoryId;
 }

@@ -5,6 +5,7 @@ import com.companyapp.backend.services.dto.response.ShiftAssignmentDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize; // PŘIDANÝ IMPORT
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -18,18 +19,19 @@ public class ShiftAssignmentController {
 
     @PostMapping
     public ResponseEntity<ShiftAssignmentDto> assignShift(
-            @RequestParam("shiftId") UUID shiftId, // PŘIDÁNO: "shiftId"
-            @RequestParam("userId") UUID userId) { // PŘIDÁNO: "userId"
+            @RequestParam("shiftId") UUID shiftId,
+            @RequestParam("userId") UUID userId) {
         ShiftAssignmentDto assignment = shiftAssignmentService.assignShift(shiftId, userId);
         return new ResponseEntity<>(assignment, HttpStatus.CREATED);
     }
 
     // --- OPRAVENÁ METODA PRO MAZÁNÍ ---
-    // Teď to bere parametry shiftId a userId, přesně jak to posílá React
+    // Teď to bere parametry shiftId a userId, přesně jak to posílá React.
+    // Chráněno přes @CheckOwnership uvnitř ShiftAssignmentService!
     @DeleteMapping
     public ResponseEntity<Void> removeAssignment(
-            @RequestParam("shiftId") UUID shiftId, // PŘIDÁNO: "shiftId"
-            @RequestParam("userId") UUID userId) { // PŘIDÁNO: "userId"
+            @RequestParam("shiftId") UUID shiftId,
+            @RequestParam("userId") UUID userId) {
         shiftAssignmentService.removeAssignmentByShiftAndUser(shiftId, userId);
         return ResponseEntity.noContent().build();
     }
@@ -37,7 +39,8 @@ public class ShiftAssignmentController {
     // Tuhle původní metodu si tu můžeš nechat pro smazání podle ID záznamu,
     // pokud bys ji někdy potřeboval, ale změnili jsme cestu, aby nekolidovala.
     @DeleteMapping("/id/{id}")
-    public ResponseEntity<Void> removeAssignmentById(@PathVariable("id") UUID id) { // PŘIDÁNO: "id"
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGEMENT')") // <--- PŘIDANÁ OCHRANA PROTI IDOR
+    public ResponseEntity<Void> removeAssignmentById(@PathVariable("id") UUID id) {
         shiftAssignmentService.removeAssignment(id);
         return ResponseEntity.noContent().build();
     }
