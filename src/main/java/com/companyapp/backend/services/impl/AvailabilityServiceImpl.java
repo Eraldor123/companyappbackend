@@ -1,5 +1,6 @@
 package com.companyapp.backend.services.impl;
 
+import com.companyapp.backend.config.CheckOwnership;
 import com.companyapp.backend.entity.Availability;
 import com.companyapp.backend.entity.ShiftAssignment;
 import com.companyapp.backend.repository.AvailabilityRepository;
@@ -24,10 +25,9 @@ import java.util.stream.Collectors;
 public class AvailabilityServiceImpl implements AvailabilityService {
 
     private final AvailabilityRepository repository;
-    private final ShiftAssignmentRepository shiftAssignmentRepository; // NOVÉ
+    private final ShiftAssignmentRepository shiftAssignmentRepository;
     private final AuditLogService auditLogService;
 
-    // Přidali jsme ShiftAssignmentRepository do konstruktoru!
     public AvailabilityServiceImpl(AvailabilityRepository repository,
                                    ShiftAssignmentRepository shiftAssignmentRepository,
                                    AuditLogService auditLogService) {
@@ -38,7 +38,8 @@ public class AvailabilityServiceImpl implements AvailabilityService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<AvailabilityDTO> getMonthlyAvailability(UUID userId, YearMonth yearMonth) {
+    // PŘIDÁNA ANOTACE @CheckOwnership PRO KONTROLU IDOR
+    public List<AvailabilityDTO> getMonthlyAvailability(@CheckOwnership UUID userId, YearMonth yearMonth) {
         LocalDate startDate = yearMonth.atDay(1);
         LocalDate endDate = yearMonth.atEndOfMonth();
 
@@ -85,7 +86,8 @@ public class AvailabilityServiceImpl implements AvailabilityService {
 
     @Override
     @Transactional
-    public void saveMonthlyAvailability(MonthlyAvailabilityRequestDto request) {
+    // PŘIDÁNA ANOTACE @CheckOwnership PRO KONTROLU IDOR (Díky rozhraní Ownable to umíme zkontrolovat)
+    public void saveMonthlyAvailability(@CheckOwnership MonthlyAvailabilityRequestDto request) {
         UUID userId = request.getUserId();
         YearMonth yearMonth = request.getMonth();
         LocalDate startDate = yearMonth.atDay(1);

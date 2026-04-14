@@ -1,5 +1,6 @@
 package com.companyapp.backend.services.impl;
 
+import com.companyapp.backend.config.CheckOwnership;
 import com.companyapp.backend.entity.Shift;
 import com.companyapp.backend.entity.ShiftAssignment;
 import com.companyapp.backend.entity.User;
@@ -19,7 +20,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.UUID;
 
@@ -39,7 +39,8 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
 
     @Override
     @Transactional
-    public ShiftAssignmentDto assignShift(UUID shiftId, UUID userId) {
+    // PŘIDÁNA ANOTACE @CheckOwnership k parametru userId
+    public ShiftAssignmentDto assignShift(UUID shiftId, @CheckOwnership UUID userId) {
         log.info("Zahajuji proces přiřazení směny {} pro uživatele {}", shiftId, userId);
 
         Shift shift = shiftRepository.findByIdWithLock(shiftId)
@@ -87,7 +88,8 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
 
     @Override
     @Transactional
-    public void removeAssignmentByShiftAndUser(UUID shiftId, UUID userId) {
+    // PŘIDÁNA ANOTACE @CheckOwnership k parametru userId
+    public void removeAssignmentByShiftAndUser(UUID shiftId, @CheckOwnership UUID userId) {
         log.info("Odebírám uživatele {} ze směny {}", userId, shiftId);
 
         // ZÁZNAM DO AUDITU (zaznamenáme před smazáním)
@@ -103,6 +105,8 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
 
     @Override
     @Transactional
+    // Zde anotaci nedáváme, protože neposíláme userId. Pokud by toto volal obyčejný uživatel,
+    // museli bychom IDOR kontrolu dopsat ručně do těla metody. Běžně se ale volá metoda výše.
     public void removeAssignment(UUID id) {
         if (!shiftAssignmentRepository.existsById(id)) {
             throw new ResourceNotFoundException("Přiřazení směny neexistuje.");

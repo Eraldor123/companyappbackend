@@ -1,5 +1,6 @@
 package com.companyapp.backend.services.impl;
 
+import com.companyapp.backend.config.CheckOwnership;
 import com.companyapp.backend.entity.Contract;
 import com.companyapp.backend.entity.User;
 import com.companyapp.backend.entity.UserProfile;
@@ -151,7 +152,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
-    public UserProfileDto getUserProfile(UUID userId) {
+    // PŘIDÁNA ANOTACE @CheckOwnership PRO KONTROLU IDOR
+    public UserProfileDto getUserProfile(@CheckOwnership UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(userNotFound));
 

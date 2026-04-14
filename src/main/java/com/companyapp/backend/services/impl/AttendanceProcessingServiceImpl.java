@@ -1,5 +1,6 @@
 package com.companyapp.backend.services.impl;
 
+import com.companyapp.backend.config.CheckOwnership;
 import com.companyapp.backend.entity.AttendanceLog;
 import com.companyapp.backend.entity.ShiftAssignment;
 import com.companyapp.backend.repository.AttendanceLogRepository;
@@ -32,7 +33,8 @@ public class AttendanceProcessingServiceImpl implements AttendanceProcessingServ
 
     @Override
     @Transactional
-    public AttendanceLogDto clockIn(UUID userId, UUID shiftAssignmentId, Instant clockInTime) {
+    // PŘIDÁNA ANOTACE @CheckOwnership
+    public AttendanceLogDto clockIn(@CheckOwnership UUID userId, UUID shiftAssignmentId, Instant clockInTime) {
         log.info("Uživatel {} si pípl příchod na směnu {}", userId, shiftAssignmentId);
 
         ShiftAssignment assignment = shiftAssignmentRepository.findById(shiftAssignmentId)
@@ -54,9 +56,11 @@ public class AttendanceProcessingServiceImpl implements AttendanceProcessingServ
         AttendanceLog savedLog = attendanceLogRepository.save(logEntity);
         return mapToDto(savedLog);
     }
+
     @Override
     @Transactional
-    public AttendanceLogDto clockOut(UUID userId, Instant clockOutTime) {
+    // PŘIDÁNA ANOTACE @CheckOwnership
+    public AttendanceLogDto clockOut(@CheckOwnership UUID userId, Instant clockOutTime) {
         log.info("Uživatel {} si pípl odchod", userId);
 
         // 1. Najdeme otevřený záznam uživatele
@@ -102,7 +106,8 @@ public class AttendanceProcessingServiceImpl implements AttendanceProcessingServ
 
     @Override
     @Transactional
-    public AttendanceLogDto processTerminalAction(UUID userId) {
+    // PŘIDÁNA ANOTACE @CheckOwnership
+    public AttendanceLogDto processTerminalAction(@CheckOwnership UUID userId) {
         Instant now = Instant.now();
         // Získáme aktuální čas pro porovnání s databází
         java.time.LocalDateTime localNow = ZonedDateTime.ofInstant(now, ZoneId.of("UTC")).toLocalDateTime();

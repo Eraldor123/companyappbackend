@@ -8,14 +8,19 @@ import java.util.List;
 import java.util.UUID;
 
 @Data
-public class MonthlyAvailabilityRequestDto {
+public class MonthlyAvailabilityRequestDto implements Ownable {
     @NotNull(message = "ID uživatele je povinné.")
     private UUID userId;
 
     @NotNull(message = "Měsíc a rok musí být specifikován.")
     private YearMonth month;
 
-    // ZMĚNA: Tady už nebereme jen LocalDate, ale náš nový objekt!
     @NotNull(message = "Seznam dostupných dnů nesmí chybět.")
     private List<AvailabilityDayDto> availableDays;
+
+    // --- PŘIDÁNO PRO IDOR ŠTÍT ---
+    @Override
+    public UUID getOwnerId() {
+        return this.userId; // Tímto říkáme štítu: "Tohle DTO patří tomuto uživateli"
+    }
 }

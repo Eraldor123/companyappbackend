@@ -5,46 +5,61 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 public class CustomUserDetails implements UserDetails {
 
-    private final User user;
+    // Ukládáme si pouze "čisté" textové hodnoty, NE celou databázovou entitu
+    private final UUID id;
+    private final String username;
+    private final String password;
+    private final boolean isActive;
+    private final List<GrantedAuthority> authorities;
 
     public CustomUserDetails(User user) {
-        this.user = user;
+        // Hned při vytvoření si vyzobeme potřebná data a entitu "user" zahodíme
+        this.id = user.getId();
+        this.username = user.getEmail();
+        this.password = user.getPasswordHash(); // Použito tvé getPasswordHash()
+        this.isActive = user.getIsActive();
+
+        // Převedeme role a uložíme je do paměti (odstřiženo od Hibernate)
+        this.authorities = user.getRoles().stream()
+                .map(role -> new SimpleGrantedAuthority("ROLE_" + role.name()))
+                .collect(Collectors.toList());
     }
 
     // PŘIDÁNO PRO BEZPEČNOSTNÍ KONTROLY (IDOR)
-    public java.util.UUID getId() {
-        return user.getId();
+    public UUID getId() {
+        return id; // Vracíme přímo zkopírované UUID
     }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return user.getRoles().stream()
-                .map(role -> new SimpleGrantedAuthority("ROLE_" + role.name()))
-                .collect(java.util.stream.Collectors.toList());
+        return authorities;
     }
 
     @Override
     public String getPassword() {
-        return user.getPasswordHash();
+        return password;
     }
 
     @Override
     public String getUsername() {
-        return user.getEmail();
+        return username;
     }
 
     @Override
     public boolean isAccountNonExpired() { return true; }
 
     @Override
-    public boolean isAccountNonLocked() { return user.getIsActive(); }
+    public boolean isAccountNonLocked() { return isActive; }
 
     @Override
     public boolean isCredentialsNonExpired() { return true; }
 
     @Override
-    public boolean isEnabled() { return user.getIsActive(); }
+    public boolean isEnabled() { return isActive; }
 }
