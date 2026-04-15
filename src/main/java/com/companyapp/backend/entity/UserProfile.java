@@ -1,7 +1,5 @@
 package com.companyapp.backend.entity;
 
-
-
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
@@ -18,25 +16,29 @@ import java.util.UUID;
 @NoArgsConstructor
 public class UserProfile {
 
+    /**
+     * OPRAVA: Změněno jméno sloupce na 'user_id'.
+     * Protože používáš @MapsId, primární klíč profilu je zároveň cizím klíčem
+     * odkazujícím na uživatele. V DB se tento sloupec jmenuje 'user_id'.
+     */
     @Id
-    @Column(name = "id")
+    @Column(name = "user_id")
     private UUID id;
 
     /**
-     * Oboustranná vazba na User, která umožňuje získat profil pro daného uživatele. Na straně User je definována jako @OneToOne(mappedBy = "profile"). Tato vazba je nastavena jako @MapsId, což znamená, že primární klíč UserProfile bude stejný jako primární klíč User. To zajišťuje, že každý uživatel může mít pouze jeden profil a každý profil je spojen s jedním uživatelem. FetchType.LAZY znamená, že profil bude načten z databáze pouze tehdy, když bude explicitně požadován, což může zlepšit výkon při načítání uživatelů bez potřeby načítat jejich profily.
+     * Vazba na User se sdíleným primárním klíčem.
+     *
      */
     @OneToOne(fetch = FetchType.LAZY)
     @MapsId
     @JoinColumn(name = "user_id")
     private User user;
 
-    // Základní informace o uživateli, které jsou důležité pro identifikaci a komunikaci s uživatelem. Tyto atributy jsou klíčové pro zobrazení informací o uživateli v aplikaci a pro personalizaci uživatelského zážitku. FirstName a LastName jsou povinné (NotBlank) a jsou uloženy jako nenulové sloupce v databázi, aby se zajistilo, že každý profil bude mít tyto základní informace.
-
-    @NotBlank
+    @NotBlank(message = "Jméno je povinné.")
     @Column(name = "first_name", nullable = false)
     private String firstName;
 
-    @NotBlank
+    @NotBlank(message = "Příjmení je povinné.")
     @Column(name = "last_name", nullable = false)
     private String lastName;
 
@@ -49,12 +51,15 @@ public class UserProfile {
     @Column(name = "profile_picture_url")
     private String profilePictureUrl;
 
+    /**
+     * OPRAVA java:S6201: Použití Pattern Matching pro instanceof.
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof UserProfile)) return false;
-        UserProfile that = (UserProfile) o;
-        return id!= null && id.equals(that.getId());
+        if (!(o instanceof UserProfile that)) return false;
+
+        return id != null && id.equals(that.getId());
     }
 
     @Override

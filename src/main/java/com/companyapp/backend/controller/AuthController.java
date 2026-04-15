@@ -19,7 +19,10 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -44,18 +47,18 @@ public class AuthController {
 
         // --- VYTVOŘENÍ BEZPEČNÉ HTTP-ONLY COOKIE ---
         ResponseCookie jwtCookie = ResponseCookie.from("jwt", jwtToken)
-                .httpOnly(true)       // Zabrání čtení přes JavaScript (XSS ochrana)
-                .secure(false)        // Během vývoje na localhostu musí být false. V produkci (na HTTPS) dej TRUE!
-                .path("/")            // Cookie platí pro celou aplikaci
-                .maxAge(24 * 60 * 60) // Platnost 1 den (v sekundách)
-                .sameSite("Lax")      // Povolí odeslání cookie z frontendu na backend
+                .httpOnly(true)
+                .secure(false)
+                .path("/")
+                // OPRAVENO: Přidáno 'L' k prvnímu číslu, aby se výpočet prováděl v typu long
+                .maxAge(24L * 60 * 60)
+                .sameSite("Lax")
                 .build();
 
-        // Odeslání odpovědi vč. hlavičky SET-COOKIE
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, jwtCookie.toString())
                 .body(AuthResponseDto.builder()
-                        .token(jwtToken) // Necháme ho i tady pro zpětnou kompatibilitu terminálu (terminály cookies často neumí)
+                        .token(jwtToken)
                         .userId(user.getId())
                         .email(user.getEmail())
                         .roles(user.getRoles().stream().map(Enum::name).collect(java.util.stream.Collectors.toSet()))

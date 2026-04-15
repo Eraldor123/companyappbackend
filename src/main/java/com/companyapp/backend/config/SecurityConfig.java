@@ -12,6 +12,8 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -32,28 +34,21 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthFilter;
 
     // ============================================================================================
-    // --- NOVÁ ČÁST: HIERARCHIE ROLÍ ---
+    // --- HIERARCHIE ROLÍ ---
     // ============================================================================================
 
-    /**
-     * 1. Definice hierarchie rolí.
-     * Říká Springu, že nadřazené role automaticky dědí oprávnění podřízených rolí.
-     * Prefix "ROLE_" je vyžadován pro správnou funkci s @PreAuthorize.
-     */
     @Bean
     public RoleHierarchy roleHierarchy() {
         RoleHierarchyImpl roleHierarchy = new RoleHierarchyImpl();
-        String hierarchy = "ROLE_ADMIN > ROLE_MANAGEMENT \n" +
-                "ROLE_MANAGEMENT > ROLE_PLANNER \n" +
-                "ROLE_PLANNER > ROLE_BASIC";
+        String hierarchy = """
+                ROLE_ADMIN > ROLE_MANAGEMENT
+                ROLE_MANAGEMENT > ROLE_PLANNER
+                ROLE_PLANNER > ROLE_BASIC
+                """;
         roleHierarchy.setHierarchy(hierarchy);
         return roleHierarchy;
     }
 
-    /**
-     * 2. Propojení hierarchie s anotacemi @PreAuthorize.
-     * Ujistí se, že při volání hasAnyRole() se vyhodnocuje naše hierarchie nadefinovaná výše.
-     */
     @Bean
     static MethodSecurityExpressionHandler methodSecurityExpressionHandler(RoleHierarchy roleHierarchy) {
         DefaultMethodSecurityExpressionHandler expressionHandler = new DefaultMethodSecurityExpressionHandler();
@@ -62,17 +57,18 @@ public class SecurityConfig {
     }
 
     // ============================================================================================
-    // --- STÁVAJÍCÍ KONFIGURACE BEZPEČNOSTI ---
+    // --- KONFIGURACE BEZPEČNOSTI ---
     // ============================================================================================
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.disable())
-                // Ochrana proti Clickjackingu a základní CSP
+                // OPRAVENO: csrf -> csrf.disable() nahrazeno method referencí
+                .csrf(AbstractHttpConfigurer::disable)
                 .headers(headers -> headers
-                        .frameOptions(frame -> frame.deny())
+                        // OPRAVENO: frame -> frame.deny() nahrazeno method referencí
+                        .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
                         .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'self'"))
                 )
                 .authorizeHttpRequests(auth -> auth
@@ -90,11 +86,6 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 
-    /**
-     * Použití BCrypt namísto SHA-256.
-     * BCrypt automaticky generuje unikátní sůl pro každé heslo a je výpočetně náročný,
-     * což chrání uživatele i při úniku databáze.
-     */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -107,7 +98,6 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
 
-        // Povolení nezbytných hlaviček včetně Cache-Control pro frontend
         configuration.setAllowedHeaders(List.of(
                 "Authorization",
                 "Content-Type",
@@ -118,7 +108,7 @@ public class SecurityConfig {
         ));
 
         configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L); // Cache na CORS rozhodnutí (1 hodina)
+        configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

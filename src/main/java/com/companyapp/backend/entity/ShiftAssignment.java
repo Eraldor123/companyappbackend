@@ -5,13 +5,13 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
 @Table(
         name = "shift_assignments",
         uniqueConstraints = {
-                // Opraveno na 'employee_id', aby to odpovídalo poli v Javě
                 @UniqueConstraint(name = "uk_shift_employee", columnNames = {"shift_id", "employee_id"})
         }
 )
@@ -25,28 +25,33 @@ public class ShiftAssignment {
     private UUID id;
 
     @Column(name = "start_time", nullable = false)
-    private java.time.LocalDateTime startTime;
+    private LocalDateTime startTime;
 
     @Column(name = "end_time", nullable = false)
-    private java.time.LocalDateTime endTime;
+    private LocalDateTime endTime;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "shift_id", nullable = false)
     private Shift shift;
 
     /**
-     * Změněno z 'user' na 'employee', aby zmizely červené chyby v Repository.
+     * Vazba na zaměstnance.
      */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "employee_id", nullable = false)
     private User employee;
 
+    /**
+     * OPRAVA java:S6201: Použití Pattern Matching pro instanceof.
+     * Proměnná 'that' je definována přímo v podmínce, což zpřehledňuje kód.
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof ShiftAssignment)) return false;
-        ShiftAssignment that = (ShiftAssignment) o;
-        return id!= null && id.equals(that.getId());
+        // Kontrola typu a deklarace proměnné 'that' v jednom kroku
+        if (!(o instanceof ShiftAssignment that)) return false;
+
+        return id != null && id.equals(that.getId());
     }
 
     @Override

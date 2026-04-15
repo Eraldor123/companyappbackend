@@ -1,26 +1,26 @@
 package com.companyapp.backend.entity;
 
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
+
 import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
 @Table(name = "availabilities")
-@Data
+@Getter
+@Setter
+@ToString
 public class Availability {
 
     @Id
-    /**
-     * FÁZE 2: Optimalizace ID generátoru pro hromadné operace.
-     * Použití SEQUENCE s allocationSize=50 umožňuje Hibernate 6 efektivní batching.
-     * Tím se eliminuje "N+1" dotazování do databáze pro každé nové ID.
-     */
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "availability_seq")
     @SequenceGenerator(
             name = "availability_seq",
-            sequenceName = "availability_id_seq",
-            allocationSize = 50
+            sequenceName = "availability_id_seq"
+            // OPRAVA: allocationSize = 50 odstraněno, protože 50 je výchozí hodnota v JPA.
     )
     private Long id;
 
@@ -36,6 +36,21 @@ public class Availability {
     @Column(name = "afternoon", nullable = false)
     private boolean afternoon;
 
+    /**
+     * OPRAVA: Redundantní "= false" odstraněno.
+     */
     @Column(name = "is_confirmed", nullable = false)
-    private boolean confirmed = false;
+    private boolean confirmed;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Availability that)) return false;
+        return id != null && id.equals(that.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
 }

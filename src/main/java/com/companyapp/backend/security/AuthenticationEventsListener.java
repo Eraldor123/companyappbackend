@@ -14,14 +14,22 @@ public class AuthenticationEventsListener {
     private final LoginAttemptService loginAttemptService;
     private final HttpServletRequest request;
 
+    /**
+     * OPRAVA java:S1172: Parametr 'event' je nezbytný pro identifikaci události Springem.
+     * V budoucnu lze z event.getAuthentication().getName() získat login uživatele pro audit.
+     */
     @EventListener
-    public void onSuccess(AuthenticationSuccessEvent event) {
+    public void onSuccess(@SuppressWarnings("unused") AuthenticationSuccessEvent event) {
         String ip = loginAttemptService.getClientIP(request);
         loginAttemptService.loginSucceeded(ip);
     }
 
+    /**
+     * OPRAVA java:S1172: Parametr 'event' potlačen, ale zachován pro budoucí logging
+     * neúspěšných pokusů konkrétních uživatelských jmen.
+     */
     @EventListener
-    public void onFailure(AuthenticationFailureBadCredentialsEvent event) {
+    public void onFailure(@SuppressWarnings("unused") AuthenticationFailureBadCredentialsEvent event) {
         String ip = loginAttemptService.getClientIP(request);
         loginAttemptService.loginFailed(ip);
     }

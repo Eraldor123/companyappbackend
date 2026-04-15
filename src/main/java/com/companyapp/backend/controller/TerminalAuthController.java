@@ -7,7 +7,10 @@ import com.companyapp.backend.services.dto.response.AttendanceLogDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 import java.util.UUID;
@@ -17,20 +20,25 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TerminalAuthController {
 
+    // OPRAVA java:S1192: Definice konstanty pro opakující se klíč
+    private static final String USER_ID_KEY = "userId";
+
     private final TerminalAuthenticationService terminalAuthService;
     private final AttendanceProcessingService attendanceService;
 
     @PostMapping("/auth")
     public ResponseEntity<Map<String, UUID>> authenticateTerminal(@Valid @RequestBody TerminalAuthRequestDto request) {
         UUID userId = terminalAuthService.authenticateTerminal(request.getPin());
-        // Vracíme Mapu pro jednoduchý JSON formát např. {"userId": "123e4567-..."}
-        return ResponseEntity.ok(Map.of("userId", userId));
+
+        // OPRAVA java:S125: Odstraněn komentář připomínající kód (JSON ukázka), který mátl analyzátor
+        return ResponseEntity.ok(Map.of(USER_ID_KEY, userId));
     }
 
     @PostMapping("/action")
     public ResponseEntity<AttendanceLogDto> handleTerminalAction(@RequestBody Map<String, UUID> request) {
-        UUID userId = request.get("userId");
-        // Zavolá naši chytrou metodu, která se postará o zbytek
+        UUID userId = request.get(USER_ID_KEY);
+
+        // OPRAVA java:S125: Zjednodušen komentář, aby neobsahoval "code noise"
         AttendanceLogDto result = attendanceService.processTerminalAction(userId);
         return ResponseEntity.ok(result);
     }

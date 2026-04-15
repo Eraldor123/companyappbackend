@@ -11,21 +11,16 @@ import java.time.LocalTime;
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor // Přidáno pro podporu Builderu a konzistenci
-@Builder // Přidáno pro konzistenci s ostatními entitami
+@AllArgsConstructor
+@Builder
 public class ShiftTemplate {
 
     @Id
-    /**
-     * FÁZE 2: Optimalizace transakcí u generátorů ID.
-     * Změna z IDENTITY na SEQUENCE pro podporu batchingu v Hibernate 6.
-     * allocationSize = 50 zajišťuje, že se ID nepoptávají v DB po jednom, ale berou se z paměťového poolu.
-     */
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "shift_template_seq")
     @SequenceGenerator(
             name = "shift_template_seq",
-            sequenceName = "shift_template_id_seq",
-            allocationSize = 50
+            sequenceName = "shift_template_id_seq"
+            // OPRAVA: allocationSize = 50 odstraněno (výchozí hodnota v JPA)
     )
     private Integer id;
 
@@ -56,9 +51,6 @@ public class ShiftTemplate {
     @Builder.Default
     private Boolean isActive = true;
 
-    /**
-     * Pořadí pro zobrazení v uživatelském rozhraní.
-     */
     @Column(name = "sort_order")
     @Builder.Default
     private Integer sortOrder = 1;
@@ -75,20 +67,26 @@ public class ShiftTemplate {
     @Builder.Default
     private Boolean hasOdpo = false;
 
+    /**
+     * OPRAVA java:S6201: Použití Pattern Matching pro instanceof.
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof ShiftTemplate)) return false;
-        ShiftTemplate that = (ShiftTemplate) o;
+        // Proměnná 'that' je deklarována přímo v podmínce
+        if (!(o instanceof ShiftTemplate that)) return false;
+
         return id != null && id.equals(that.getId());
     }
 
     @Override
     public int hashCode() {
-        // Používáme getClass().hashCode() pro prevenci problémů s Hibernate proxies
         return getClass().hashCode();
     }
 
+    /**
+     * Ponecháno pro kompatibilitu se servisy (např. FacilityManagementService).
+     */
     public void setActive(boolean b) {
         this.isActive = b;
     }

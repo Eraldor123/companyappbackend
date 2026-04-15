@@ -15,16 +15,14 @@ import java.math.BigDecimal;
 public class PauseRule {
 
     @Id
-    /**
+    /*
      * FÁZE 2: Optimalizace transakcí u generátorů ID.
-     * Změna z IDENTITY na SEQUENCE pro podporu batchingu v Hibernate 6.
-     * allocationSize = 50 zajišťuje, že se ID nepoptávají v DB po jednom, ale berou se z paměťového poolu.
+     * OPRAVA: Odstraněno redundantní allocationSize=50 (výchozí hodnota v JPA).
      */
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "pause_rule_seq")
     @SequenceGenerator(
             name = "pause_rule_seq",
-            sequenceName = "pause_rule_id_seq",
-            allocationSize = 50
+            sequenceName = "pause_rule_id_seq"
     )
     private Integer id;
 
@@ -41,11 +39,16 @@ public class PauseRule {
     @Column(name = "pause_duration_minutes")
     private Integer pauseDurationMinutes;
 
+    /**
+     * OPRAVA java:S6201: Použití Pattern Matching pro instanceof.
+     * Proměnná 'that' je deklarována přímo v podmínce, čímž odpadá nutnost explicitního castingu.
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof PauseRule)) return false;
-        PauseRule that = (PauseRule) o;
+        // Sloučení kontroly typu a vytvoření proměnné do jednoho kroku
+        if (!(o instanceof PauseRule that)) return false;
+
         return id != null && id.equals(that.getId());
     }
 

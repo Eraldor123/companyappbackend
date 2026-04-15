@@ -8,9 +8,17 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface OperatingHoursService {
-    Object getOperatingHoursForDate(LocalDate date); // Tuhle přepíšeme ve Fázi 4
 
-    // Nové metody pro React UI
+    /**
+     * Získá provozní dobu pro konkrétní datum (zohledňuje standard i sezóny).
+     * Ponecháno pro Fázi 4 (výpočetní logika).
+     */
+    Object getOperatingHoursForDate(LocalDate date);
+
+    // ==========================================
+    // Metody pro React UI (Správa provozní doby)
+    // ==========================================
+
     StandardHoursDto getStandardHours();
     void updateStandardHours(StandardHoursDto dto);
 
@@ -21,5 +29,11 @@ public interface OperatingHoursService {
     PauseRuleDto getPauseRule();
     void updatePauseRule(PauseRuleDto dto);
 
+    /**
+     * OPRAVA: Metoda zjišťuje, zda je systém nastaven.
+     * I když je aktuálně volána inverzně (s vykřičníkem), ponecháváme pozitivní název
+     * pro čistotu API a budoucí logiku validací.
+     */
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     boolean isAnyOperatingHoursPresent();
 }

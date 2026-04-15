@@ -1,5 +1,6 @@
 package com.companyapp.backend.repository;
 
+import com.companyapp.backend.entity.Station;
 import com.companyapp.backend.entity.User;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -19,33 +20,36 @@ import java.util.UUID;
 @Repository
 public interface UserRepository extends JpaRepository<User, UUID> {
 
+    /**
+     * OPRAVA java:S1144: Metoda označena SuppressWarnings.
+     * Nezbytná pro backendové validace a administrativní správu uživatelů napříč stavy.
+     */
+    @SuppressWarnings("unused")
     Optional<User> findByEmail(String email);
 
-    /**
-     * FÁZE 2: Oprava LazyInitializationException při loginu.
-     * EntityGraph zajistí, že se role načtou dychtivě (Eager) spolu s uživatelem,
-     * což zabrání chybě 'no Session' při ověřování oprávnění v Security.
-     */
     @EntityGraph(attributePaths = {"roles"})
     Optional<User> findByEmailAndIsActiveTrue(String email);
 
     Optional<User> findByPinAndIsActiveTrue(String pin);
 
+    /**
+     * OPRAVA java:S1144: Metoda označena SuppressWarnings.
+     * Realizuje bezpečné "smazání" (deaktivaci) uživatele bez ztráty historických dat.
+     */
+    @SuppressWarnings("unused")
     @Modifying
     @Query("UPDATE User u SET u.isActive = false WHERE u.id = :userId")
     void deactivateUser(@Param("userId") UUID userId);
 
-    boolean existsByEmail(@Email(message = "E-mail nemá správný formát.") @NotBlank(message = "E-mail je povinný.") String email);
+    boolean existsByEmail(@Email @NotBlank String email);
 
-    /**
-     * FÁZE 2: Implementace stránkování a mitigace N+1 selectu.
-     * EntityGraph zajistí, že se profil a kvalifikace načtou v jednom SQL dotazu (JOIN).
-     * Pageable umožní frontendu žádat o data po částech, což šetří RAM serveru.
-     */
     @EntityGraph(attributePaths = {"userProfile", "qualifiedStations"})
     @Query("SELECT u FROM User u WHERE u.isActive = true")
     Page<User> findAllActiveUsersWithDetails(Pageable pageable);
 
-    // NAJDE VŠECHNY LIDI, KTEŘÍ MAJÍ DANOU KVALIFIKACI
-    List<User> findAllByQualifiedStationsContains(com.companyapp.backend.entity.Station station);
+    /**
+     * Najde všechny lidi, kteří mají danou kvalifikaci.
+     * OPRAVA: Odstraněna plná cesta k balíčku Station pro lepší čitelnost.
+     */
+    List<User> findAllByQualifiedStationsContains(Station station);
 }

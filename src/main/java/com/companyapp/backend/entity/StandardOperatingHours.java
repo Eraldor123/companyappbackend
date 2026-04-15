@@ -15,16 +15,14 @@ import java.time.LocalTime;
 public class StandardOperatingHours {
 
     @Id
-    /**
+    /*
      * FÁZE 2: Optimalizace transakcí u generátorů ID.
-     * Změna z IDENTITY na SEQUENCE pro podporu batchingu v Hibernate 6.
-     * allocationSize = 50 umožňuje aplikaci rezervovat si blok ID v paměti a šetřit dotazy do DB.
+     * OPRAVA: Odstraněno redundantní allocationSize=50 (výchozí hodnota).
      */
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "standard_hours_seq")
     @SequenceGenerator(
             name = "standard_hours_seq",
-            sequenceName = "standard_hours_id_seq",
-            allocationSize = 50
+            sequenceName = "standard_hours_id_seq"
     )
     private Integer id;
 
@@ -42,8 +40,11 @@ public class StandardOperatingHours {
     private LocalTime weekOdpoEnd;
 
     // Víkend (So-Ne)
+    /**
+     * OPRAVA: Odstraněno redundantní výchozí přiřazení false.
+     */
     @Column(name = "weekend_same", nullable = false)
-    private Boolean weekendSame = false;
+    private Boolean weekendSame;
 
     @Column(name = "weekend_dopo_start")
     private LocalTime weekendDopoStart;
@@ -56,4 +57,19 @@ public class StandardOperatingHours {
 
     @Column(name = "weekend_odpo_end")
     private LocalTime weekendOdpoEnd;
+
+    /**
+     * OPRAVA: Přidána metoda equals s využitím Pattern Matching (Java 16+).
+     */
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof StandardOperatingHours that)) return false;
+        return id != null && id.equals(that.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
 }

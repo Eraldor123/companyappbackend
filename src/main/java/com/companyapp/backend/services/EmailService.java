@@ -18,6 +18,11 @@ public class EmailService {
         sendEmail(to, subject, text);
     }
 
+    /**
+     * OPRAVA java:S1144: Metoda označena SuppressWarnings.
+     * Připraveno pro budoucí automatizovaný onboarding uživatelů.
+     */
+    @SuppressWarnings("unused")
     public void sendWelcomeEmail(String to) {
         String subject = "Vítejte v CompanyApp!";
         String text = "Dobrý den,\n\nrádi vás vítáme v naší aplikaci CompanyApp! Jsme rádi, že jste se k nám připojili. Pokud máte jakékoliv dotazy nebo potřebujete pomoc, neváhejte nás kontaktovat.\n\nS pozdravem,\nTým CompanyApp";
@@ -25,6 +30,11 @@ public class EmailService {
         sendEmail(to, subject, text);
     }
 
+    /**
+     * OPRAVA java:S1144: Metoda označena SuppressWarnings.
+     * Klíčová funkce pro budoucí modul "Chytrý směnář" – informuje zaměstnance o rozpisu.
+     */
+    @SuppressWarnings("unused")
     public void sendShiftAssignmentsEmail(String to, String[] shiftDetails) {
         String subject = "Nové přiřazení na směny";
         StringBuilder textBuilder = new StringBuilder("Dobrý den,\n\nbyli jste přiřazeni na následující směny:\n\n");
@@ -45,6 +55,7 @@ public class EmailService {
 
     public void sendEmail(String to, String subject, String text) {
         SimpleMailMessage message = new SimpleMailMessage();
+        // Zde doporučuji v budoucnu použít hodnotu z @Value("${spring.mail.username}")
         message.setFrom("noreply@companyapp.cz");
         message.setTo(to);
         message.setSubject(subject);

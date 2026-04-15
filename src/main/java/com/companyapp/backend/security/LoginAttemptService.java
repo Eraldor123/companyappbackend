@@ -10,13 +10,19 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class LoginAttemptService {
 
-    private final int MAX_ATTEMPT = 5; // Po 5. pokusu blokujeme
+    /**
+     * OPRAVA java:S1170 & java:S115:
+     * Přidáno 'static', aby byla konstanta sdílená napříč instancemi (šetří paměť).
+     * Přejmenováno na MAX_ATTEMPTS (množné číslo a UPPER_SNAKE_CASE odpovídá standardům pro konstanty).
+     */
+    private static final int MAX_ATTEMPTS = 5;
+
     private final Cache<String, Integer> attemptsCache;
 
     public LoginAttemptService() {
-        super();
+        // OPRAVA: Odstraněno redundantní super()
         // Cache se automaticky vymaže po 15 minutách od posledního zápisu
-        attemptsCache = Caffeine.newBuilder()
+        this.attemptsCache = Caffeine.newBuilder()
                 .expireAfterWrite(15, TimeUnit.MINUTES)
                 .build();
     }
@@ -33,10 +39,13 @@ public class LoginAttemptService {
 
     public boolean isBlocked(String key) {
         Integer attempts = attemptsCache.getIfPresent(key);
-        return attempts != null && attempts >= MAX_ATTEMPT;
+        // OPRAVA: Použití nové konstanty MAX_ATTEMPTS
+        return attempts != null && attempts >= MAX_ATTEMPTS;
     }
 
-    // Pomocná metoda pro získání IP adresy i přes proxy (Cloudflare/Nginx)
+    /**
+     * Pomocná metoda pro získání IP adresy i přes proxy (Cloudflare/Nginx).
+     */
     public String getClientIP(HttpServletRequest request) {
         String xfHeader = request.getHeader("X-Forwarded-For");
         if (xfHeader == null || xfHeader.isEmpty()) {

@@ -1,5 +1,6 @@
 package com.companyapp.backend.entity;
 
+import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -7,12 +8,12 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Wrapper nad entitou User pro Spring Security.
- * Ukládá si pouze nezbytná data v paměti, aby se předešlo problémům s Hibernate session.
+ * OPRAVENO: Typová nekompatibilita u Streamu a přidán Lombok @Getter.
  */
+@Getter // Vyřeší "Field 'id' may have Lombok @Getter" i pro username a password
 public class CustomUserDetails implements UserDetails {
 
     private final UUID id;
@@ -24,24 +25,16 @@ public class CustomUserDetails implements UserDetails {
     public CustomUserDetails(User user) {
         this.id = user.getId();
         this.username = user.getEmail();
-        // ZMĚNA: Použij standardní getter, který ti vrací heslo z DB (již v BCryptu)
         this.password = user.getPassword();
         this.isActive = user.getIsActive();
-        // ... zbytek kódu ...
 
-
-        // Převedeme AccessLevel enumy na GrantedAuthority pro Spring Security
+        /*
+         * OPRAVA: Přidáno explicitní přetypování na <GrantedAuthority>,
+         * aby .toList() vrátil správný typ seznamu.
+         */
         this.authorities = user.getRoles().stream()
-                .map(role -> new SimpleGrantedAuthority("ROLE_" + role.name()))
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Klíčová metoda pro náš bezpečnostní aspekt @CheckOwnership (IDOR ochrana).
-     * Umožňuje nám porovnat ID v requestu s ID přihlášeného uživatele.
-     */
-    public UUID getId() {
-        return id;
+                .map(role -> (GrantedAuthority) new SimpleGrantedAuthority("ROLE_" + role.name()))
+                .toList();
     }
 
     @Override
@@ -49,15 +42,8 @@ public class CustomUserDetails implements UserDetails {
         return authorities;
     }
 
-    @Override
-    public String getPassword() {
-        return password;
-    }
-
-    @Override
-    public String getUsername() {
-        return username;
-    }
+    // Metody getUsername(), getPassword() a getId() už nemusíš psát ručně,
+    // Lombok @Getter je vygeneruje za tebe na pozadí.
 
     @Override
     public boolean isAccountNonExpired() {
@@ -66,7 +52,7 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public boolean isAccountNonLocked() {
-        return isActive; // Pokud není uživatel aktivní, účet je zamčený
+        return isEnabled();
     }
 
     @Override

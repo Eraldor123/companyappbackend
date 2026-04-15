@@ -17,8 +17,8 @@ import java.util.UUID;
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor // Přidáno pro lepší kompatibilitu s Builderem
-@Builder // Přidáno pro snadnější vytváření testovacích dat
+@AllArgsConstructor
+@Builder
 public class User {
 
     @Id
@@ -36,10 +36,8 @@ public class User {
     private String pin;
 
     /**
-     * Heslo pro webové rozhraní.
-     * Poznámka k chybě 'Cannot resolve column':
-     * Pokud IntelliJ svítí červeně, ujisti se, že v databázi v tabulce 'users'
-     * tento sloupec skutečně existuje.
+     * Poznámka: Pokud IntelliJ stále hlásí 'Cannot resolve column',
+     * zkus Refresh v záložce Database (Alt+1 -> Database).
      */
     @Column(name = "password")
     private String password;
@@ -48,21 +46,20 @@ public class User {
     @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false)
+    @Builder.Default
     private Set<AccessLevel> roles = new HashSet<>();
 
-    /**
-     * Seznam stanovišť, na která je uživatel kvalifikován.
-     * DŮLEŽITÉ: Lombok díky @Getter vygeneruje metodu getQualifiedStations(),
-     * kterou vyžaduje tvůj PositionSettingsServiceImpl.
-     */
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "user_qualified_stations",
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "station_id")
     )
+    @Builder.Default
     private Set<Station> qualifiedStations = new HashSet<>();
 
+    // OPRAVA: Přidáno @Builder.Default, aby builder neignoroval true
+    @Builder.Default
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 
@@ -70,10 +67,17 @@ public class User {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, optional = true, fetch = FetchType.LAZY)
+    /**
+     * OPRAVA: Odstraněno fetch=LAZY a optional=true.
+     * Na non-owning side OneToOne je LAZY ignorováno a optional=true je default.
+     */
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
     private UserProfile userProfile;
 
-    @OneToOne(mappedBy = "user", optional = true, fetch = FetchType.LAZY)
+    /**
+     * OPRAVA: Odstraněno fetch=LAZY a optional=true.
+     */
+    @OneToOne(mappedBy = "user")
     private PasswordResetToken passwordResetToken;
 
     // --- HELPER METODY ---
@@ -90,8 +94,8 @@ public class User {
         return userProfile != null ? userProfile.getFirstName() : null;
     }
 
-    // --- JPA SPECIFICKÉ EQUALS/HASHCODE ---
-    // Používáme pouze ID, aby nedocházelo k cyklení s kolekcemi (StackOverflow)
+    // --- STANDARDNÍ METODY ---
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

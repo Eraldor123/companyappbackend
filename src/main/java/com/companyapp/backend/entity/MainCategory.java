@@ -13,16 +13,15 @@ import java.util.List;
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor // Přidáno pro podporu Builderu
-@Builder // Přidáno pro bezchybnou funkci v PositionSettingsServiceImpl
+@AllArgsConstructor
+@Builder
 public class MainCategory {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "main_category_seq")
     @SequenceGenerator(
             name = "main_category_seq",
-            sequenceName = "main_category_id_seq",
-            allocationSize = 50
+            sequenceName = "main_category_id_seq"
     )
     private Integer id;
 
@@ -35,50 +34,39 @@ public class MainCategory {
     @Column(name = "hex_color")
     private String hexColor;
 
+    // OPRAVA: Přidáno @Builder.Default, aby builder neignoroval výchozí hodnotu 1
+    @Builder.Default
     @Column(name = "sort_order")
     private Integer sortOrder = 1;
 
+    // OPRAVA: Přidáno @Builder.Default, aby builder neignoroval výchozí hodnotu true
+    @Builder.Default
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 
-    /**
-     * TATO ČÁST CHYBĚLA: Vazba na stanoviště.
-     * cascade = ALL a orphanRemoval = true zajistí, že při smazání kategorie
-     * zmizí i její stanoviště.
-     */
     @OneToMany(mappedBy = "category", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @Builder.Default // Zajišťuje, že builder nevytvoří null, ale prázdný ArrayList
+    @Builder.Default
     private List<Station> stations = new ArrayList<>();
-
-    // --- POMOCNÉ METODY PRO KONZISTENCI VAZBY ---
-
-    public void addStation(Station station) {
-        stations.add(station);
-        station.setCategory(this);
-    }
-
-    public void removeStation(Station station) {
-        stations.remove(station);
-        station.setCategory(null);
-    }
 
     // --- STANDARDNÍ METODY ---
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof MainCategory)) return false;
-        MainCategory that = (MainCategory) o;
+        if (!(o instanceof MainCategory that)) return false;
         return id != null && id.equals(that.getId());
     }
 
     @Override
     public int hashCode() {
-        // Používáme třídu pro stabilitu v Hibernate
         return getClass().hashCode();
     }
 
-    public void setActive(boolean b) {
-        this.isActive = b;
+    /**
+     * OPRAVA: Metoda vrácena zpět.
+     * FacilityManagementServiceImpl ji vyžaduje a Lombok ji sám v tomto tvaru nevygeneruje.
+     */
+    public void setActive(boolean active) {
+        this.isActive = active;
     }
 }

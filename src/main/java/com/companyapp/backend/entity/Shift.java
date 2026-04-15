@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.BatchSize; // PŘIDÁNO: Pro optimalizaci N+1
+import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDate;
 import java.time.ZonedDateTime;
@@ -25,26 +25,20 @@ public class Shift {
     private UUID id;
 
     /**
-     * Oboustranná vazba na Station. LAZY zajišťuje, že se stanice nenačte
-     * automaticky, pokud ji nepotřebujeme.
+     * Zde LAZY zůstává, protože u @ManyToOne je výchozí EAGER.
      */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "station_id", nullable = false)
     private Station station;
 
-    /**
-     * Oboustranná vazba na ShiftTemplate.
-     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "template_id")
     private ShiftTemplate template;
 
     /**
-     * FÁZE 2: Kolekce přiřazení pro EntityGraph a mitigaci N+1 problému.
-     * LAZY je zde kritické pro výkon. BatchSize(20) zajistí, že Hibernate
-     * načte účastníky pro více směn najednou jedním dotazem.
+     * OPRAVA: fetch = FetchType.LAZY odstraněno, u @OneToMany je to výchozí hodnota.
      */
-    @OneToMany(mappedBy = "shift", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "shift", cascade = CascadeType.ALL)
     @BatchSize(size = 20)
     private List<ShiftAssignment> assignments = new ArrayList<>();
 
@@ -63,14 +57,21 @@ public class Shift {
     @Column(name = "required_capacity", nullable = false)
     private Integer requiredCapacity;
 
-    @Column(name = "description", length = 255)
+    /**
+     * OPRAVA: length = 255 odstraněno (výchozí hodnota).
+     */
+    @Column(name = "description")
     private String description;
 
+    /**
+     * OPRAVA java:S6201: Použití Pattern Matching pro instanceof.
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Shift)) return false;
-        Shift that = (Shift) o;
+        // Proměnná 'that' se vytvoří rovnou v podmínce
+        if (!(o instanceof Shift that)) return false;
+
         return id != null && id.equals(that.getId());
     }
 

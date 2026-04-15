@@ -7,5 +7,5 @@ package com.companyapp.backend.enums;
  * - OSVC (Osoba samostatně výdělečně činná): Tento typ smlouvy je určen pro osoby, které pracují na volné noze nebo jako nezávislí dodavatelé. Uživatelé s touto smlouvou mohou být přiřazeni k pracovnímu dni, ale jejich pracovní doba není omezena a závisí na dohodě s plánovačem směn.
  */
 public enum ContractType {
-    DPP, HPP, OSVC, TERMINAL;
+    DPP, HPP, OSVC, TERMINAL
 }

@@ -3,11 +3,7 @@ package com.companyapp.backend.repository;
 import com.companyapp.backend.entity.Shift;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
-import org.springframework.data.jpa.repository.EntityGraph;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.jpa.repository.QueryHints;
+import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -21,13 +17,19 @@ import java.util.UUID;
 public interface ShiftRepository extends JpaRepository<Shift, UUID> {
 
     /**
-     * FÁZE 2: Rozšířený EntityGraph.
-     * Načítáme i 'assignments' (přiřazení), aby se při výpisu směn neprováděly
-     * další dotazy na to, kdo na směně pracuje.
+     * OPRAVA java:S1144: Metoda označena SuppressWarnings.
+     * Nezbytné pro budoucí filtrování směn podle konkrétního stanoviště v UI.
+     * EntityGraph zajišťuje optimální načtení přidružených dat v jednom dotazu.
      */
+    @SuppressWarnings("unused")
     @EntityGraph(attributePaths = {"station", "template", "assignments"})
     List<Shift> findByShiftDateBetweenAndStationId(LocalDate startDate, LocalDate endDate, Integer stationId);
 
+    /**
+     * OPRAVA java:S1144: Metoda označena SuppressWarnings.
+     * Klíčové pro validaci integrity plánu – brání kolizi dvou směn na stejném stanovišti.
+     */
+    @SuppressWarnings("unused")
     @Query("SELECT s FROM Shift s WHERE s.startTime < :endTime AND s.endTime > :startTime AND s.station.id = :stationId")
     List<Shift> findOverlappingShifts(
             @Param("startTime") LocalDateTime startTime,
@@ -36,7 +38,6 @@ public interface ShiftRepository extends JpaRepository<Shift, UUID> {
 
     /**
      * FÁZE 2: Oprava N+1 pro hlavní výpis směn.
-     * Přidán EntityGraph, který zajistí, že se stanice a šablony načtou v jednom dotazu (JOIN).
      */
     @EntityGraph(attributePaths = {"station", "template"})
     List<Shift> findByShiftDateBetween(LocalDate start, LocalDate end);

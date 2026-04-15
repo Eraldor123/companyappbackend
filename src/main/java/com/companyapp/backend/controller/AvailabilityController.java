@@ -1,14 +1,16 @@
 package com.companyapp.backend.controller;
 
 import com.companyapp.backend.services.AvailabilityService;
+import com.companyapp.backend.services.dto.request.AvailabilityDTO;
 import com.companyapp.backend.services.dto.request.MonthlyAvailabilityRequestDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize; // PŘIDÁNO
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.YearMonth;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -18,10 +20,13 @@ public class AvailabilityController {
 
     private final AvailabilityService availabilityService;
 
+    /**
+     * OPRAVENO: ResponseEntity<?> nahrazeno konkrétním typem List<AvailabilityDTO>.
+     * Odstraňuje SonarLint warning a zpřehledňuje API kontrakt.
+     */
     @GetMapping("/monthly/{userId}/{yearMonthStr}")
-    // OCHRANA 1: Můžeš vidět jen svůj kalendář, ledaže jsi ADMIN/MANAGER/PLANNER
     @PreAuthorize("#userId == authentication.principal.id or hasAnyRole('ADMIN', 'MANAGEMENT', 'PLANNER')")
-    public ResponseEntity<?> getMonthlyAvailability(
+    public ResponseEntity<List<AvailabilityDTO>> getMonthlyAvailability(
             @PathVariable("userId") UUID userId,
             @PathVariable("yearMonthStr") String yearMonthStr) {
 
@@ -30,7 +35,6 @@ public class AvailabilityController {
     }
 
     @PostMapping("/monthly")
-    // OCHRANA 2: Můžeš upravit jen svůj kalendář, ledaže jsi ADMIN/MANAGER
     @PreAuthorize("#request.userId == authentication.principal.id or hasAnyRole('ADMIN', 'MANAGEMENT')")
     public ResponseEntity<Void> submitMonthlyAvailability(
             @Valid @RequestBody MonthlyAvailabilityRequestDto request) {

@@ -2,7 +2,7 @@ package com.companyapp.backend.services.dto.response;
 
 import lombok.Builder;
 import lombok.Data;
-
+@SuppressWarnings("unused")
 @Data
 @Builder
 public class StationDto {

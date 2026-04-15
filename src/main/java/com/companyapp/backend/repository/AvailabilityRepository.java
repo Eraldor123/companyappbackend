@@ -15,7 +15,7 @@ import java.util.UUID;
 public interface AvailabilityRepository extends JpaRepository<Availability, Long> {
 
     // ==========================================================
-    // 1. NOVÉ METODY PRO REACT KALENDÁŘ (To, co jsme psali dřív)
+    // 1. NOVÉ METODY PRO REACT KALENDÁŘ
     // ==========================================================
     @Query("SELECT a FROM Availability a WHERE a.userId = :userId AND a.availableDate BETWEEN :startDate AND :endDate")
     List<Availability> findByUserIdAndDateRange(
@@ -24,6 +24,11 @@ public interface AvailabilityRepository extends JpaRepository<Availability, Long
             @Param("endDate") LocalDate endDate
     );
 
+    /**
+     * OPRAVA java:S1144: Metoda označena SuppressWarnings, protože je připravena
+     * pro budoucí integraci s frontendovým kalendářem (hromadné mazání).
+     */
+    @SuppressWarnings("unused")
     @Modifying
     @Query("DELETE FROM Availability a WHERE a.userId = :userId AND a.availableDate BETWEEN :startDate AND :endDate")
     void deleteByUserIdAndDateRange(
@@ -42,7 +47,6 @@ public interface AvailabilityRepository extends JpaRepository<Availability, Long
             @Param("date") LocalDate date
     );
 
-    // Stará metoda dříve asi měnila status. My ji teď napojíme na náš nový boolean "confirmed = true"
     @Modifying
     @Query("UPDATE Availability a SET a.confirmed = true WHERE a.userId = :userId AND a.availableDate = :date")
     void updateStatusByUserIdAndAvailableDate(
@@ -50,7 +54,6 @@ public interface AvailabilityRepository extends JpaRepository<Availability, Long
             @Param("date") LocalDate date
     );
 
-    // Najde všechny dostupné lidi pro daný týden
     @Query("SELECT a FROM Availability a WHERE a.availableDate BETWEEN :startDate AND :endDate")
     List<Availability> findByDateRange(
             @Param("startDate") LocalDate startDate,

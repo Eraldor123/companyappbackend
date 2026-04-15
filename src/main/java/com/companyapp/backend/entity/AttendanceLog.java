@@ -33,53 +33,40 @@ public class AttendanceLog {
     /**
      * Vazba na přiřazení směny, ke kterému tento záznam docházky patří.
      * Unikátní omezení na úrovni DB zajišťuje, že pro jedno přiřazení směny nemůže existovat
-     * více záznamů docházky, což brání duplicitám v evidenci.
+     * více záznamů docházky.
      */
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "shift_assignment_id", nullable = false, unique = true)
     private ShiftAssignment shiftAssignment;
 
-    /**
-     * Pole pro uložení času příchodu zaměstnance.
-     */
     @Column(name = "clock_in")
     private LocalDateTime clockIn;
 
-    /**
-     * Pole pro uložení času odchodu zaměstnance.
-     */
     @Column(name = "clock_out")
     private LocalDateTime clockOut;
 
-    /**
-     * Pole pro uložení celkového odpracovaného času v minutách.
-     */
     @Column(name = "deducted_pause_minutes")
     private Integer deductedPauseMinutes;
 
-    /**
-     * Pole pro uložení čistého odpracovaného času v minutách.
-     */
     @Column(name = "net_time_minutes")
     private Integer netTimeMinutes;
 
-    /**
-     * Pole pro označení, zda je záznam docházky neobvyklý.
-     */
     @Column(name = "is_unusual", nullable = false)
     private Boolean isUnusual = false;
 
-    /**
-     * Pole pro označení, zda manažer schválil tento záznam docházky.
-     */
     @Column(name = "manager_approved", nullable = false)
     private Boolean managerApproved = true;
 
+    /**
+     * OPRAVA java:S6201: Použití Pattern Matching pro instanceof.
+     * Proměnná 'that' se definuje přímo v podmínce, čímž odpadá explicitní přetypování.
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof AttendanceLog)) return false;
-        AttendanceLog that = (AttendanceLog) o;
+        // Sloučení kontroly typu a vytvoření proměnné 'that' do jednoho řádku
+        if (!(o instanceof AttendanceLog that)) return false;
+
         return id != null && id.equals(that.getId());
     }
 
