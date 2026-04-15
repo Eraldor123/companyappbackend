@@ -5,7 +5,7 @@ import com.companyapp.backend.entity.ShiftAssignment;
 import com.companyapp.backend.repository.AttendanceLogRepository;
 import com.companyapp.backend.repository.ShiftAssignmentRepository;
 import com.companyapp.backend.repository.ShiftRepository;
-import com.companyapp.backend.services.AuditLogService; // PŘIDÁNO
+import com.companyapp.backend.services.AuditLogService;
 import com.companyapp.backend.services.ShiftService;
 import com.companyapp.backend.services.dto.request.ShiftUpdateRequest;
 import com.companyapp.backend.services.dto.response.ShiftDto;
@@ -26,25 +26,30 @@ public class ShiftServiceImpl implements ShiftService {
     private final ShiftRepository shiftRepository;
     private final ShiftAssignmentRepository shiftAssignmentRepository;
     private final AttendanceLogRepository attendanceLogRepository;
-    private final AuditLogService auditLogService; // PŘIDÁNO: Záznam do auditu
+    private final AuditLogService auditLogService;
+
+    // KONSTANTY PRO ODSTRANĚNÍ DUPLIKACÍ (java:S1192)
+    private static final String ENTITY_NAME = "Shift";
+    private static final String SHIFT_NOT_FOUND = "Směna nebyla nalezena.";
+    private static final ZoneId UTC_ZONE = ZoneId.of("UTC");
+    private static final ZoneId PRAGUE_ZONE = ZoneId.of("Europe/Prague");
 
     @Override
     @Transactional
     public ShiftDto updateShift(UUID id, ShiftUpdateRequest request) {
         Shift shift = shiftRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Směna nebyla nalezena."));
+                .orElseThrow(() -> new ResourceNotFoundException(SHIFT_NOT_FOUND));
 
-        shift.setStartTime(request.getStartTime().atZone(ZoneId.of("UTC")));
-        shift.setEndTime(request.getEndTime().atZone(ZoneId.of("UTC")));
+        shift.setStartTime(request.getStartTime().atZone(UTC_ZONE));
+        shift.setEndTime(request.getEndTime().atZone(UTC_ZONE));
         shift.setRequiredCapacity(request.getRequiredCapacity());
         shift.setDescription(request.getDescription());
 
         Shift savedShift = shiftRepository.save(shift);
 
-        // ZÁZNAM DO AUDITU
         auditLogService.logAction(
                 "UPDATE_SHIFT",
-                "Shift",
+                ENTITY_NAME,
                 savedShift.getId().toString(),
                 "Upravena směna (Kapacita: " + savedShift.getRequiredCapacity() + "). Stanoviště: " + savedShift.getStation().getName()
         );
@@ -52,29 +57,19 @@ public class ShiftServiceImpl implements ShiftService {
         return mapToDto(savedShift);
     }
 
-    private ShiftDto mapToDto(Shift shift) {
-        return ShiftDto.builder()
-                .id(shift.getId())
-                .startTime(shift.getStartTime())
-                .endTime(shift.getEndTime())
-                .requiredCapacity(shift.getRequiredCapacity())
-                .stationId(shift.getStation().getId())
-                .build();
-    }
-
     @Override
     @Transactional
     public void splitShift(UUID shiftId) {
         Shift originalShift = shiftRepository.findById(shiftId)
-                .orElseThrow(() -> new ResourceNotFoundException("Směna nenalezena."));
+                .orElseThrow(() -> new ResourceNotFoundException(SHIFT_NOT_FOUND));
 
         ZonedDateTime splitTime = originalShift.getStartTime()
-                .withZoneSameInstant(ZoneId.of("Europe/Prague"))
+                .withZoneSameInstant(PRAGUE_ZONE)
                 .withHour(14)
                 .withMinute(0)
                 .withSecond(0)
                 .withNano(0)
-                .withZoneSameInstant(ZoneId.of("UTC"));
+                .withZoneSameInstant(UTC_ZONE);
 
         if (originalShift.getStartTime().isBefore(splitTime) && originalShift.getEndTime().isAfter(splitTime)) {
             Shift newShift = new Shift();
@@ -89,10 +84,9 @@ public class ShiftServiceImpl implements ShiftService {
             originalShift.setEndTime(splitTime);
             shiftRepository.save(originalShift);
 
-            // ZÁZNAM DO AUDITU
             auditLogService.logAction(
                     "SPLIT_SHIFT",
-                    "Shift",
+                    ENTITY_NAME,
                     originalShift.getId().toString(),
                     "Směna rozdělena ve 14:00. Nová směna ID: " + newShift.getId()
             );
@@ -106,7 +100,7 @@ public class ShiftServiceImpl implements ShiftService {
     @Transactional
     public void deleteShift(UUID id) {
         Shift shift = shiftRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Směna s ID " + id + " nebyla nalezena."));
+                .orElseThrow(() -> new ResourceNotFoundException(SHIFT_NOT_FOUND));
 
         List<ShiftAssignment> assignments = shiftAssignmentRepository.findByShiftDateBetween(shift.getShiftDate(), shift.getShiftDate())
                 .stream()
@@ -123,17 +117,24 @@ public class ShiftServiceImpl implements ShiftService {
             shiftAssignmentRepository.deleteAll(assignments);
         }
 
-        // Uložíme si info pro log, než objekt smažeme
         String dateAndStation = shift.getShiftDate() + " na stanovišti " + shift.getStation().getName();
-
         shiftRepository.delete(shift);
 
-        // ZÁZNAM DO AUDITU
         auditLogService.logAction(
                 "DELETE_SHIFT",
-                "Shift",
+                ENTITY_NAME,
                 id.toString(),
                 "Kompletně smazána směna z " + dateAndStation + " (odebráno " + assignments.size() + " uživatelů)."
         );
+    }
+
+    private ShiftDto mapToDto(Shift shift) {
+        return ShiftDto.builder()
+                .id(shift.getId())
+                .startTime(shift.getStartTime())
+                .endTime(shift.getEndTime())
+                .requiredCapacity(shift.getRequiredCapacity())
+                .stationId(shift.getStation().getId())
+                .build();
     }
 }

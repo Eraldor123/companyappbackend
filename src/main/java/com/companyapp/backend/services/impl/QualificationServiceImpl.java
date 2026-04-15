@@ -7,7 +7,7 @@ import com.companyapp.backend.entity.UserProfile;
 import com.companyapp.backend.repository.ContractRepository;
 import com.companyapp.backend.repository.StationRepository;
 import com.companyapp.backend.repository.UserRepository;
-import com.companyapp.backend.services.AuditLogService; // PŘIDÁNO
+import com.companyapp.backend.services.AuditLogService;
 import com.companyapp.backend.services.QualificationService;
 import com.companyapp.backend.services.dto.response.EmployeeQualificationDto;
 import com.companyapp.backend.services.exception.ResourceNotFoundException;
@@ -32,22 +32,25 @@ public class QualificationServiceImpl implements QualificationService {
     private final UserRepository userRepository;
     private final StationRepository stationRepository;
     private final ContractRepository contractRepository;
-    private final AuditLogService auditLogService; // PŘIDÁNO
+    private final AuditLogService auditLogService;
+
+    // KONSTANTY PRO CHYBOVÉ HLÁŠKY (java:S1192)
+    private static final String USER_NOT_FOUND = "Uživatel nenalezen.";
+    private static final String STATION_NOT_FOUND = "Stanoviště nenalezeno.";
 
     @Override
     @Transactional(readOnly = true)
     public Page<EmployeeQualificationDto> getAllEmployeesWithStations(Pageable pageable) {
-        // 1. Získáme stránkované uživatele přímo z DB (vyžaduje update v UserRepository)
         Page<User> userPage = userRepository.findAllActiveUsersWithDetails(pageable);
 
-        // 2. Mapujeme stránku entit na stránku DTO
         return userPage.map(user -> {
             UserProfile profile = user.getUserProfile();
             Contract contract = contractRepository.findLatestContractByUserId(user.getId()).orElse(null);
 
+            // OPRAVA java:S6204: Použití .toList() místo .collect(Collectors.toList())
             List<Integer> stationIds = user.getQualifiedStations().stream()
                     .map(Station::getId)
-                    .collect(Collectors.toList());
+                    .toList();
 
             return EmployeeQualificationDto.builder()
                     .id(user.getId())
@@ -64,7 +67,7 @@ public class QualificationServiceImpl implements QualificationService {
     @Transactional
     public void updateUserStations(UUID userId, Set<Integer> stationIds) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Uživatel nenalezen."));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
 
         List<Station> stations = stationRepository.findAllById(stationIds);
 
@@ -72,8 +75,6 @@ public class QualificationServiceImpl implements QualificationService {
         userRepository.save(user);
         log.info("Přiřazená stanoviště byla aktualizována pro uživatele {}.", userId);
 
-        // ZÁZNAM DO AUDITU
-        // Vytvoříme si řetězec s názvy stanovišť, ať je log hezky čitelný
         String stationNames = stations.stream()
                 .map(Station::getName)
                 .collect(Collectors.joining(", "));
@@ -86,7 +87,7 @@ public class QualificationServiceImpl implements QualificationService {
                 "UPDATE_USER_QUALIFICATIONS",
                 "User",
                 userId.toString(),
-                "Změněny kvalifikace pro uživatele " + user.getEmail() + ". Nový seznam povolených stanovišť: [" + stationNames + "]."
+                "Změněny kvalifikace pro uživatele " + user.getEmail() + ". Nový seznam: [" + stationNames + "]."
         );
     }
 
@@ -94,14 +95,15 @@ public class QualificationServiceImpl implements QualificationService {
     @Transactional(readOnly = true)
     public boolean isUserQualifiedForStation(UUID userId, Integer stationId) {
         Station station = stationRepository.findById(stationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Stanoviště nenalezeno."));
+                .orElseThrow(() -> new ResourceNotFoundException(STATION_NOT_FOUND));
 
+        // Bezpečné vyhodnocení Booleanu
         if (Boolean.FALSE.equals(station.getNeedsQualification())) {
             return true;
         }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Uživatel nenalezen."));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
 
         return user.getQualifiedStations().contains(station);
     }

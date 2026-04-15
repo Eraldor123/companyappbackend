@@ -22,7 +22,7 @@ public class AutoSeeder implements CommandLineRunner {
         log.info("🚀 ZAHUČELO TO DO AUTO SEEDERU: Spouštím generování brigádníků...");
 
         // Zde si nastavíš počet. Teď to vygeneruje 50 lidí.
-        String vysledek = dataSeederService.seedArmy(50);
+        String vysledek = dataSeederService.seedArmy(0);
 
         log.info("✅ HOTOVO: {}", vysledek);
     }

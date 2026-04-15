@@ -8,7 +8,7 @@ import com.companyapp.backend.services.ShiftAssignmentService;
 import com.companyapp.backend.services.dto.request.AutoPlanRequestDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest; // PŘIDÁNO
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,25 +40,20 @@ public class AutoPlanServiceImpl implements AutoPlanService {
         if (start == null) start = LocalDate.now();
         if (end == null) end = start.plusDays(6);
 
-        log.info("FÁZE 2: Spouštím optimalizované auto-plánování pro období: {} až {}", start, end);
+        log.info("Spouštím auto-plánování pro období: {} až {}", start, end);
 
-        // 1. BULK LOADING: Načtení směn s EntityGraph (vyřešeno v repository)
         List<Shift> shifts = shiftRepository.findByShiftDateBetween(start, end);
 
         if (request.getCategoryId() != null) {
             shifts = shifts.stream()
                     .filter(s -> s.getStation().getCategory().getId().equals(request.getCategoryId()))
-                    .collect(Collectors.toList());
+                    .toList();
         }
 
-        // 2. BULK LOADING: Načtení všech aktivních uživatelů (PageRequest.of(0, Integer.MAX_VALUE) kvůli změně na Pageable)
         List<User> users = userRepository.findAllActiveUsersWithDetails(PageRequest.of(0, Integer.MAX_VALUE)).getContent();
-
-        // 3. BULK LOADING: Načtení všech přiřazení a dostupností pro dané období do paměti
         List<Availability> avails = availabilityRepository.findByDateRange(start, end);
         List<ShiftAssignment> allAssignmentsInPeriod = shiftAssignmentRepository.findByShiftDateBetween(start, end);
 
-        // Pre-kalkulace počtu směn pro férovost (řeší N+1 dotazů v findBestCandidate)
         Map<UUID, Long> userShiftCounts = allAssignmentsInPeriod.stream()
                 .collect(Collectors.groupingBy(sa -> sa.getEmployee().getId(), Collectors.counting()));
 
@@ -67,7 +62,6 @@ public class AutoPlanServiceImpl implements AutoPlanService {
         int successfulAssignments = 0;
 
         for (Shift shift : shifts) {
-            // Používáme pre-loadovanou kolekci assignments z entity Shift (Fáze 2)
             int currentAssigned = shift.getAssignments().size();
             int slotsToFill = shift.getRequiredCapacity() - currentAssigned;
 
@@ -75,14 +69,9 @@ public class AutoPlanServiceImpl implements AutoPlanService {
                 User best = findBestCandidate(shift, users, avails, allAssignmentsInPeriod, userShiftCounts, request);
                 if (best != null) {
                     try {
-                        // Volání assignShift (které má pesimistický zámek z Fáze 1)
                         shiftAssignmentService.assignShift(shift.getId(), best.getId());
                         successfulAssignments++;
-
-                        // Aktualizace lokálních struktur po úspěšném přiřazení (aby se neplánoval stejný člověk na stejný čas)
                         userShiftCounts.merge(best.getId(), 1L, Long::sum);
-                        // Poznámka: v reálném assignments listu by se musel přidat nový ShiftAssignment,
-                        // ale pro jednoduchost algoritmu stačí zámek v databázi.
                     } catch (Exception e) {
                         log.warn("Přiřazení selhalo pro {}: {}", best.getLastName(), e.getMessage());
                     }
@@ -105,46 +94,48 @@ public class AutoPlanServiceImpl implements AutoPlanService {
         double maxScore = -1.0;
 
         for (User user : users) {
-            // 1. Kontrola dostupnosti (v paměti)
-            if (!isUserAvailable(user, shift, avails)) continue;
-
-            // 2. Kontrola kolize (v paměti místo DB dotazu countOverlappingShifts)
+            // OPRAVA java:S135: Sloučení kontrol do jedné podmínky místo více příkazů 'continue'
+            boolean available = isUserAvailable(user, shift, avails);
             boolean hasOverlap = allAssignments.stream()
                     .filter(sa -> sa.getEmployee().getId().equals(user.getId()))
                     .anyMatch(sa -> isOverlapping(sa, shift));
-            if (hasOverlap) continue;
 
-            // 3. Výpočet skóre
-            boolean isQualified = user.getQualifiedStations().stream()
-                    .anyMatch(s -> s.getId().equals(shift.getStation().getId()));
-            double trainingScore = isQualified ? (100.0 - req.getTrainingWeight()) : (double) req.getTrainingWeight();
+            if (available && !hasOverlap) {
+                // Výpočet skóre proběhne jen pro validní kandidáty
+                double totalScore = calculateScore(user, shift, userShiftCounts, req);
 
-            // Férovost z pre-kalkulované mapy
-            long totalShifts = userShiftCounts.getOrDefault(user.getId(), 0L);
-            double fairnessScore = (20.0 - totalShifts) * (req.getFairnessWeight() / 10.0);
-
-            double morningBonus = (shift.getStartTime().withZoneSameInstant(ZoneId.of("Europe/Prague")).getHour() < 12) ? 50.0 : 0.0;
-
-            double totalScore = trainingScore + fairnessScore + morningBonus;
-
-            if (totalScore > maxScore) {
-                maxScore = totalScore;
-                best = user;
+                if (totalScore > maxScore) {
+                    maxScore = totalScore;
+                    best = user;
+                }
             }
         }
         return best;
     }
 
+    /**
+     * Pomocná metoda pro výpočet skóre - oddělení logiky zvyšuje čitelnost.
+     */
+    private double calculateScore(User user, Shift shift, Map<UUID, Long> userShiftCounts, AutoPlanRequestDto req) {
+        boolean isQualified = user.getQualifiedStations().stream()
+                .anyMatch(s -> s.getId().equals(shift.getStation().getId()));
+
+        double trainingScore = isQualified ? (100.0 - req.getTrainingWeight()) : (double) req.getTrainingWeight();
+
+        long totalShifts = userShiftCounts.getOrDefault(user.getId(), 0L);
+        double fairnessScore = (20.0 - totalShifts) * (req.getFairnessWeight() / 10.0);
+
+        double morningBonus = (shift.getStartTime().withZoneSameInstant(ZoneId.of("Europe/Prague")).getHour() < 12) ? 50.0 : 0.0;
+
+        return trainingScore + fairnessScore + morningBonus;
+    }
+
     private boolean isOverlapping(ShiftAssignment sa, Shift shift) {
-        // sa.getStartTime() už VRACÍ LocalDateTime, proto zde nesmí být .toLocalDateTime()
         LocalDateTime startA = sa.getStartTime();
         LocalDateTime endA = sa.getEndTime();
-
-        // shift.getStartTime() VRACÍ ZonedDateTime, zde je převod v pořádku
         LocalDateTime startB = shift.getStartTime().toLocalDateTime();
         LocalDateTime endB = shift.getEndTime().toLocalDateTime();
 
-        // Tolerance 1 minuty pro navazující směny
         return startA.isBefore(endB.minusMinutes(1)) && startB.isBefore(endA.minusMinutes(1));
     }
 

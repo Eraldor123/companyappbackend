@@ -4,7 +4,7 @@ import com.companyapp.backend.entity.MainCategory;
 import com.companyapp.backend.entity.Station;
 import com.companyapp.backend.repository.MainCategoryRepository;
 import com.companyapp.backend.repository.StationRepository;
-import com.companyapp.backend.services.AuditLogService; // PŘIDÁNO
+import com.companyapp.backend.services.AuditLogService;
 import com.companyapp.backend.services.FacilityManagementService;
 import com.companyapp.backend.services.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -19,11 +19,12 @@ public class FacilityManagementServiceImpl implements FacilityManagementService 
 
     private final StationRepository stationRepository;
     private final MainCategoryRepository mainCategoryRepository;
-    private final AuditLogService auditLogService; // PŘIDÁNO
+    private final AuditLogService auditLogService;
 
     @Override
     @Transactional
     public void deactivateStation(Integer stationId) {
+        // OPRAVA: Odstraněna mezera v "nenalezeno"
         Station station = stationRepository.findById(stationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Stanoviště nenalezeno."));
 
@@ -31,7 +32,6 @@ public class FacilityManagementServiceImpl implements FacilityManagementService 
         stationRepository.save(station);
         log.info("Stanoviště {} bylo bezpečně deaktivováno.", station.getName());
 
-        // ZÁZNAM DO AUDITU
         auditLogService.logAction(
                 "DEACTIVATE_STATION",
                 "Station",
@@ -50,7 +50,6 @@ public class FacilityManagementServiceImpl implements FacilityManagementService 
         mainCategoryRepository.save(category);
         log.info("Kategorie {} byla deaktivována. Historická data zůstávají nedotčena.", category.getName());
 
-        // ZÁZNAM DO AUDITU
         auditLogService.logAction(
                 "DEACTIVATE_CATEGORY",
                 "MainCategory",
@@ -59,7 +58,13 @@ public class FacilityManagementServiceImpl implements FacilityManagementService 
         );
     }
 
+    /**
+     * OPRAVA java:S1144: Metoda je ponechána pro potřeby údržby databáze
+     * nebo administrátorské zásahy.
+     */
+    @Override
     @Transactional
+    @SuppressWarnings("unused")
     public void hardDeleteStation(Integer stationId, String confirmationText) {
         if (!"DELETE".equals(confirmationText)) {
             throw new IllegalArgumentException("Pro trvalé smazání musíte zadat text 'DELETE'.");
@@ -72,7 +77,6 @@ public class FacilityManagementServiceImpl implements FacilityManagementService 
         stationRepository.delete(station);
         log.warn("Stanoviště {} bylo TRVALE smazáno vč. kaskádových vazeb!", stationName);
 
-        // ZÁZNAM DO AUDITU
         auditLogService.logAction(
                 "HARD_DELETE_STATION",
                 "Station",

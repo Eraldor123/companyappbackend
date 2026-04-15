@@ -24,6 +24,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Set;
+import java.util.stream.Collectors;
+
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
@@ -41,19 +44,24 @@ public class AuthController {
         );
 
         CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
-        User user = userRepository.findByEmailAndIsActiveTrue(request.getEmail()).orElseThrow();
+        User user = userRepository.findByEmailAndIsActiveTrue(request.getEmail())
+                .orElseThrow(); // Zde by mohl být ResourceNotFoundException
 
         String jwtToken = jwtService.generateToken(userDetails);
 
         // --- VYTVOŘENÍ BEZPEČNÉ HTTP-ONLY COOKIE ---
         ResponseCookie jwtCookie = ResponseCookie.from("jwt", jwtToken)
                 .httpOnly(true)
-                .secure(false)
+                .secure(false) // V produkci (HTTPS) změnit na true
                 .path("/")
-                // OPRAVENO: Přidáno 'L' k prvnímu číslu, aby se výpočet prováděl v typu long
                 .maxAge(24L * 60 * 60)
                 .sameSite("Lax")
                 .build();
+
+        // OPRAVA: Moderní stream pro Set rolí
+        Set<String> roles = user.getRoles().stream()
+                .map(Enum::name)
+                .collect(Collectors.toSet());
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, jwtCookie.toString())
@@ -61,7 +69,7 @@ public class AuthController {
                         .token(jwtToken)
                         .userId(user.getId())
                         .email(user.getEmail())
-                        .roles(user.getRoles().stream().map(Enum::name).collect(java.util.stream.Collectors.toSet()))
+                        .roles(roles)
                         .build());
     }
 

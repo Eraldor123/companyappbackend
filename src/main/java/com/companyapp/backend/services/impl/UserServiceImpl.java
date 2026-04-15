@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Random;
 import java.util.UUID;
 
 @Slf4j
@@ -35,10 +36,14 @@ public class UserServiceImpl implements UserService {
     private final UserProfileRepository userProfileRepository;
     private final ContractRepository contractRepository;
     private final PasswordEncoder passwordEncoder;
-    private final AuditLogService auditLogService; // PŘIDÁNO: Záznam do auditu
-    private final EmailService emailService; // PŘIDÁNO: Pro odesílání e-mailů
+    private final AuditLogService auditLogService;
+    private final EmailService emailService;
 
-    private static final String userNotFound = "Uživatel nenalezen.";
+    // OPRAVA java:S115: Konstanta musí být velkými písmeny
+    private static final String USER_NOT_FOUND = "Uživatel nenalezen.";
+
+    // OPRAVA java:S2119: Instance Random se vytvoří jednou a pak se opakovaně používá
+    private static final Random RANDOM = new Random();
 
     @Override
     @Transactional
@@ -52,19 +57,21 @@ public class UserServiceImpl implements UserService {
         User user = new User();
         user.setEmail(request.getEmail());
         user.setRoles(request.getAccessLevels());
-        // OPRAVA: Použití setIsActive místo setActive
         user.setIsActive(true);
 
-        // 1. Generování PINu pro terminál (zůstává)
+        // 1. Generování PINu pro terminál
         String generatedPin;
         String hashedPin;
         do {
-            generatedPin = user.getRoles().contains(AccessLevel.TERMINAL) ? "0000" : String.format("%04d", new java.util.Random().nextInt(10000));
+            // OPRAVA: Používáme sdílenou instanci RANDOM místo vytváření nové v každém kroku cyklu
+            generatedPin = user.getRoles().contains(AccessLevel.TERMINAL)
+                    ? "0000"
+                    : String.format("%04d", RANDOM.nextInt(10000));
             hashedPin = passwordEncoder.encode(generatedPin);
         } while (userRepository.findByPinAndIsActiveTrue(hashedPin).isPresent());
         user.setPin(hashedPin);
 
-        // 2. PŘIDÁNO: Generování hesla pro web (např. 8 náhodných znaků)
+        // 2. Generování hesla pro web
         String generatedPassword = UUID.randomUUID().toString().substring(0, 8);
         user.setPassword(passwordEncoder.encode(generatedPassword));
 
@@ -89,15 +96,15 @@ public class UserServiceImpl implements UserService {
         if (request.getContractSize() != null) {
             contract.setFte(BigDecimal.valueOf(request.getContractSize()));
         }
-        if (contract.getType() == ContractType.OSVC)
+        if (contract.getType() == ContractType.OSVC) {
             contract.setCompanyIdNumber(request.getIco());
+        }
         contract.setValidFrom(LocalDate.now());
 
         userRepository.save(user);
         userProfileRepository.save(profile);
         contractRepository.save(contract);
 
-        // ZÁZNAM DO AUDITU
         auditLogService.logAction(
                 "CREATE_USER",
                 "User",
@@ -106,7 +113,6 @@ public class UserServiceImpl implements UserService {
         );
 
         if (request.isSendPassword()) {
-            // Tady bys mohl vytvořit metodu v EmailService pro uvítací e-mail
             emailService.sendRegistrationEmail(user.getEmail(), generatedPin, generatedPassword);
             log.info("E-mail s přístupovými údaji odeslán na: {}", user.getEmail());
         }
@@ -118,14 +124,12 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void deactivateUser(UUID userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(userNotFound));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
 
-        // OPRAVA: Použití setIsActive místo setActive
         user.setIsActive(false);
         userRepository.save(user);
         log.info("Uživatel {} byl deaktivován. Historie zůstala zachována.", userId);
 
-        // ZÁZNAM DO AUDITU
         auditLogService.logAction(
                 "DEACTIVATE_USER",
                 "User",
@@ -138,13 +142,12 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void hardDeleteUser(UUID userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(userNotFound));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
 
         String deletedEmail = user.getEmail();
         userRepository.delete(user);
         log.warn("Uživatel {} byl TVRDĚ smazán vč. přerušení relací.", userId);
 
-        // ZÁZNAM DO AUDITU
         auditLogService.logAction(
                 "HARD_DELETE_USER",
                 "User",
@@ -155,10 +158,9 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
-    // PŘIDÁNA ANOTACE @CheckOwnership PRO KONTROLU IDOR
     public UserProfileDto getUserProfile(@CheckOwnership UUID userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(userNotFound));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
 
         if (user.getUserProfile() == null) {
             throw new ResourceNotFoundException("Profil uživatele nenalezen.");
@@ -175,7 +177,7 @@ public class UserServiceImpl implements UserService {
                 .firstName(profile.getFirstName())
                 .lastName(profile.getLastName())
                 .email(user.getEmail())
-                .isActive(user.isActive())
+                .isActive(user.isActive()) // Lombok @Getter vygeneruje isActive() pro boolean IsActive
                 .contractType(contract != null && contract.getType() != null ? contract.getType().name() : "N/A")
                 .build();
     }

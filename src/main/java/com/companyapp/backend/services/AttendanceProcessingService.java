@@ -9,9 +9,19 @@ import java.util.List;
 import java.util.UUID;
 
 public interface AttendanceProcessingService {
+
     AttendanceLogDto clockIn(UUID userId, UUID shiftAssignmentId, Instant clockInTime);
+
     AttendanceLogDto clockOut(UUID userId, Instant clockOutTime);
+
     AttendanceLogDto processTerminalAction(UUID userId);
+
     void rejectOvertime(UUID attendanceLogId, String reason);
+
+    /**
+     * OPRAVA java:S1144: Metoda označena SuppressWarnings, protože definuje
+     * budoucí rozšíření pro dělení směn (pauzy, lékaři, rotace na pracovištích).
+     */
+    @SuppressWarnings("unused")
     List<ShiftAssignmentDto> splitShiftAssignment(UUID shiftAssignmentId, ZonedDateTime breakStart, ZonedDateTime breakEnd);
 }

@@ -9,7 +9,6 @@ import com.companyapp.backend.repository.ShiftAssignmentRepository;
 import com.companyapp.backend.repository.ShiftRepository;
 import com.companyapp.backend.repository.UserRepository;
 import com.companyapp.backend.services.AuditLogService;
-import com.companyapp.backend.services.QualificationService;
 import com.companyapp.backend.services.ShiftAssignmentService;
 import com.companyapp.backend.services.dto.response.ShiftAssignmentDto;
 import com.companyapp.backend.services.exception.AvailabilityNotProvidedException;
@@ -32,22 +31,28 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
     private final UserRepository userRepository;
     private final ShiftAssignmentRepository shiftAssignmentRepository;
     private final AvailabilityRepository availabilityRepository;
-    private final QualificationService qualificationService;
     private final AuditLogService auditLogService;
 
-    private final static String entityName = "ShiftAssignment";
+    /**
+     * OPRAVA java:S1124 & java:S115:
+     * 1. Změněno pořadí modifikátorů na 'static final'.
+     * 2. Přejmenováno na ENTITY_NAME (UPPER_SNAKE_CASE).
+     */
+    private static final String ENTITY_NAME = "ShiftAssignment";
+
+    private static final String SHIFT_NOT_FOUND = "Směna nebyla nalezena.";
+    private static final String USER_NOT_FOUND = "Uživatel nebyl nalezen.";
 
     @Override
     @Transactional
-    // PŘIDÁNA ANOTACE @CheckOwnership k parametru userId
     public ShiftAssignmentDto assignShift(UUID shiftId, @CheckOwnership UUID userId) {
         log.info("Zahajuji proces přiřazení směny {} pro uživatele {}", shiftId, userId);
 
         Shift shift = shiftRepository.findByIdWithLock(shiftId)
-                .orElseThrow(() -> new ResourceNotFoundException("Směna nebyla nalezena."));
+                .orElseThrow(() -> new ResourceNotFoundException(SHIFT_NOT_FOUND));
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Uživatel nebyl nalezen."));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
 
         long currentCount = shiftAssignmentRepository.countByShiftId(shiftId);
         if (currentCount >= shift.getRequiredCapacity()) {
@@ -60,10 +65,6 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
             throw new AvailabilityNotProvidedException("Zaměstnanec nemá nahlášenou dostupnost na tento den.");
         }
 
-        // TADY BYLA PŘÍSNÁ BLOKACE PŘEKRYVU SMĚN - Byla odstraněna, aby manažer
-        // mohl (v případě potřeby) přiřadit uživatele na více stanovišť ve stejný čas.
-        // Varování na kolizi nyní řeší frontend pomocí ScheduleControlleru.
-
         ShiftAssignment assignment = new ShiftAssignment();
         assignment.setShift(shift);
         assignment.setEmployee(user);
@@ -75,10 +76,9 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
 
         ShiftAssignment savedAssignment = shiftAssignmentRepository.save(assignment);
 
-        // ZÁZNAM DO AUDITU
         auditLogService.logAction(
                 "ASSIGN_USER_TO_SHIFT",
-                entityName,
+                ENTITY_NAME,
                 savedAssignment.getId().toString(),
                 "Uživatel " + user.getEmail() + " přiřazen na směnu (Stanoviště: " + shift.getStation().getName() + ", Datum: " + shift.getShiftDate() + ")."
         );
@@ -88,14 +88,12 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
 
     @Override
     @Transactional
-    // PŘIDÁNA ANOTACE @CheckOwnership k parametru userId
     public void removeAssignmentByShiftAndUser(UUID shiftId, @CheckOwnership UUID userId) {
         log.info("Odebírám uživatele {} ze směny {}", userId, shiftId);
 
-        // ZÁZNAM DO AUDITU (zaznamenáme před smazáním)
         auditLogService.logAction(
                 "REMOVE_USER_FROM_SHIFT",
-                entityName,
+                ENTITY_NAME,
                 shiftId.toString() + "_" + userId.toString(),
                 "Uživatel (ID: " + userId + ") odebrán ze směny (ID: " + shiftId + ")."
         );
@@ -105,17 +103,14 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
 
     @Override
     @Transactional
-    // Zde anotaci nedáváme, protože neposíláme userId. Pokud by toto volal obyčejný uživatel,
-    // museli bychom IDOR kontrolu dopsat ručně do těla metody. Běžně se ale volá metoda výše.
     public void removeAssignment(UUID id) {
         if (!shiftAssignmentRepository.existsById(id)) {
             throw new ResourceNotFoundException("Přiřazení směny neexistuje.");
         }
 
-        // ZÁZNAM DO AUDITU
         auditLogService.logAction(
                 "REMOVE_SHIFT_ASSIGNMENT",
-                entityName,
+                ENTITY_NAME,
                 id.toString(),
                 "Zrušeno přiřazení (Assignment ID: " + id + ")."
         );

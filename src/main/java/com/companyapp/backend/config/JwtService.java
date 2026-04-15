@@ -2,14 +2,14 @@ package com.companyapp.backend.config;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.io.Decoders;
-import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
-import java.security.Key;
+import javax.crypto.SecretKey;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
+
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -18,10 +18,6 @@ import java.util.function.Function;
 @Service
 public class JwtService {
 
-    /**
-     * FÁZE 1: Skrytí Secrets splněno.
-     * Hodnota není v kódu, ale je injektována Springem z bezpečného zdroje.
-     */
     @Value("${security.jwt.secret-key}")
     private String secretKey;
 
@@ -39,24 +35,22 @@ public class JwtService {
     }
 
     public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
-        // Výchozí platnost: 24 hodin
-        long expirationTime = 1000L * 60 * 60 * 24;
+        long expirationTime = 1000L * 60 * 60 * 24; // 24h default
 
-        // Zjistíme, zda se hlásí terminál
         boolean isTerminal = userDetails.getAuthorities().stream()
                 .anyMatch(authority -> authority.getAuthority().equals("ROLE_TERMINAL"));
 
         if (isTerminal) {
-            // Platnost pro terminál: 10 let
-            expirationTime = 1000L * 60 * 60 * 24 * 365 * 10;
+            expirationTime = 1000L * 60 * 60 * 24 * 365 * 10; // 10 let
         }
 
+        // NOVÉ API 0.12.x: Metody jsou kratší a intuitivnější
         return Jwts.builder()
-                .setClaims(extraClaims)
-                .setSubject(userDetails.getUsername())
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + expirationTime))
-                .signWith(getSignInKey(), SignatureAlgorithm.HS256)
+                .claims(extraClaims)
+                .subject(userDetails.getUsername())
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + expirationTime))
+                .signWith(getSignInKey()) // Algoritmus se detekuje automaticky podle klíče
                 .compact();
     }
 
@@ -74,15 +68,16 @@ public class JwtService {
     }
 
     private Claims extractAllClaims(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(getSignInKey())
+        // NOVÉ API 0.12.x: parserBuilder() -> parser(), setSigningKey() -> verifyWith()
+        return Jwts.parser()
+                .verifyWith(getSignInKey())
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token) // parseClaimsJws -> parseSignedClaims
+                .getPayload();             // getBody -> getPayload
     }
 
-    private Key getSignInKey() {
-        // Načtení klíče z proměnné secretKey, která je v produkci naplněna z Environment Variable
+    private SecretKey getSignInKey() {
+        // NOVÉ API 0.12.x: Doporučuje se vracet přímo SecretKey
         byte[] keyBytes = Decoders.BASE64.decode(secretKey);
         return Keys.hmacShaKeyFor(keyBytes);
     }

@@ -19,7 +19,8 @@ public class TimeCalculationServiceImpl implements TimeCalculationService {
 
     @Override
     public Duration calculateNetWorkTime(ZonedDateTime startTime, ZonedDateTime endTime) {
-        if (startTime == null | endTime == null | startTime.isAfter(endTime)) {
+        // OPRAVA java:S2178: Změněno z | na || pro zajištění short-circuit logiky a ochrany před NPE
+        if (startTime == null || endTime == null || startTime.isAfter(endTime)) {
             throw new IllegalArgumentException("Neplatný časový úsek směny.");
         }
 

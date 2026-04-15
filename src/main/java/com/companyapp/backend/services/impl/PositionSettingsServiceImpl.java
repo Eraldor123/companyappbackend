@@ -15,6 +15,8 @@ import com.companyapp.backend.services.dto.request.CreateTemplateRequestDto;
 import com.companyapp.backend.services.dto.response.PositionHierarchyDto;
 import com.companyapp.backend.services.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,7 +24,7 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -33,14 +35,27 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     private final ShiftTemplateRepository templateRepository;
     private final UserRepository userRepository;
 
+    // KONSTANTY PRO ODSTRANĚNÍ DUPLIKACÍ (java:S1192)
+    private static final String CAT_NOT_FOUND = "Kategorie nenalezena";
+    private static final String STATION_NOT_FOUND = "Stanoviště nenalezeno";
+    private static final int DEFAULT_SORT = 999;
+
+    // SELF-INJECTION PRO SPRÁVNÉ FUNGOVÁNÍ TRANSAKCÍ (java:S6809)
+    private PositionSettingsService self;
+
+    @Autowired
+    public void setSelf(@Lazy PositionSettingsService self) {
+        this.self = self;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public PositionHierarchyDto getFullHierarchy() {
         List<MainCategory> allCategories = categoryRepository.findAll();
         List<PositionHierarchyDto.CategoryNodeDto> categoryNodes = allCategories.stream()
-                .sorted(Comparator.comparing(c -> c.getSortOrder() == null ? 999 : c.getSortOrder()))
+                .sorted(Comparator.comparing(c -> getSortOrder(c.getSortOrder())))
                 .map(this::mapCategoryToNode)
-                .collect(Collectors.toList());
+                .toList();
 
         return PositionHierarchyDto.builder().categories(categoryNodes).build();
     }
@@ -57,7 +72,7 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     @Transactional
     public void updateCategory(Integer id, CreateCategoryRequestDto request) {
         MainCategory category = categoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Kategorie nenalezena"));
+                .orElseThrow(() -> new ResourceNotFoundException(CAT_NOT_FOUND));
         mapDtoToCategory(request, category);
         categoryRepository.save(category);
     }
@@ -66,10 +81,11 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     @Transactional
     public void deleteCategory(Integer id) {
         MainCategory category = categoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Kategorie nenalezena"));
+                .orElseThrow(() -> new ResourceNotFoundException(CAT_NOT_FOUND));
 
         if (category.getStations() != null) {
-            new ArrayList<>(category.getStations()).forEach(s -> deleteStation(s.getId()));
+            // OPRAVA java:S6809: Volání přes 'self', aby byla zachována transakčnost
+            new ArrayList<>(category.getStations()).forEach(s -> self.deleteStation(s.getId()));
         }
         categoryRepository.delete(category);
     }
@@ -78,18 +94,14 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     @Transactional
     public void createStation(CreateStationRequestDto request) {
         MainCategory category = categoryRepository.findById(request.getCategoryId())
-                .orElseThrow(() -> new ResourceNotFoundException("Kategorie nenalezena"));
+                .orElseThrow(() -> new ResourceNotFoundException(CAT_NOT_FOUND));
 
         Station station = new Station();
         station.setCategory(category);
         mapDtoToStation(request, station);
         Station savedStation = stationRepository.save(station);
 
-        // OPRAVA: Místo setStations použijeme getStations().add()
-        if (category.getStations() == null) {
-            // Tohle by se nemělo stát, pokud máš v Entitě = new ArrayList<>()
-            // ale pro jistotu to tu necháme
-        } else {
+        if (category.getStations() != null) {
             category.getStations().add(savedStation);
         }
     }
@@ -98,7 +110,7 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     @Transactional
     public void updateStation(Integer id, CreateStationRequestDto request) {
         Station station = stationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Stanoviště nenalezeno"));
+                .orElseThrow(() -> new ResourceNotFoundException(STATION_NOT_FOUND));
         mapDtoToStation(request, station);
         stationRepository.save(station);
     }
@@ -107,14 +119,13 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     @Transactional
     public void deleteStation(Integer id) {
         Station station = stationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Stanoviště nenalezeno"));
+                .orElseThrow(() -> new ResourceNotFoundException(STATION_NOT_FOUND));
 
         List<ShiftTemplate> templates = templateRepository.findByStationId(id);
         templateRepository.deleteAll(templates);
 
         List<User> qualifiedUsers = userRepository.findAllByQualifiedStationsContains(station);
         for (User user : qualifiedUsers) {
-            // TADY BYLA CHYBA: Ujisti se, že User má metodu getQualifiedStations()
             user.getQualifiedStations().remove(station);
         }
         userRepository.saveAll(qualifiedUsers);
@@ -125,14 +136,13 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     @Transactional
     public void createTemplate(CreateTemplateRequestDto request) {
         Station station = stationRepository.findById(request.getStationId())
-                .orElseThrow(() -> new ResourceNotFoundException("Stanoviště nenalezeno"));
+                .orElseThrow(() -> new ResourceNotFoundException(STATION_NOT_FOUND));
 
         ShiftTemplate template = new ShiftTemplate();
         template.setStation(station);
         mapDtoToTemplate(request, template);
         ShiftTemplate savedTemplate = templateRepository.save(template);
 
-        // OPRAVA: Místo setTemplates použijeme getTemplates().add()
         if (station.getTemplates() != null) {
             station.getTemplates().add(savedTemplate);
         }
@@ -153,31 +163,31 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
         templateRepository.deleteById(id);
     }
 
-    // --- POMOCNÉ METODY ---
+    // --- POMOCNÉ METODY PRO MAPOVÁNÍ (Odstranění boolean literálů a ternárů) ---
 
     private void mapDtoToCategory(CreateCategoryRequestDto dto, MainCategory entity) {
         entity.setName(dto.getName());
         entity.setHexColor(dto.getHexColor());
-        entity.setSortOrder(dto.getSortOrder() != null ? dto.getSortOrder() : 1);
-        entity.setIsActive(dto.getIsActive() != null ? dto.getIsActive() : true);
+        entity.setSortOrder(Objects.requireNonNullElse(dto.getSortOrder(), 1));
+        entity.setIsActive(!Boolean.FALSE.equals(dto.getIsActive()));
     }
 
     private void mapDtoToStation(CreateStationRequestDto dto, Station entity) {
         entity.setName(dto.getName());
-        entity.setCapacityLimit(dto.getCapacityLimit() != null ? dto.getCapacityLimit() : 1);
-        entity.setNeedsQualification(dto.getNeedsQualification() != null ? dto.getNeedsQualification() : false);
-        entity.setSortOrder(dto.getSortOrder() != null ? dto.getSortOrder() : 1);
-        entity.setIsActive(dto.getIsActive() != null ? dto.getIsActive() : true);
+        entity.setCapacityLimit(Objects.requireNonNullElse(dto.getCapacityLimit(), 1));
+        entity.setNeedsQualification(Boolean.TRUE.equals(dto.getNeedsQualification()));
+        entity.setSortOrder(Objects.requireNonNullElse(dto.getSortOrder(), 1));
+        entity.setIsActive(!Boolean.FALSE.equals(dto.getIsActive()));
     }
 
     private void mapDtoToTemplate(CreateTemplateRequestDto dto, ShiftTemplate entity) {
         entity.setName(dto.getName());
         entity.setWorkersNeeded(dto.getWorkersNeeded());
-        entity.setSortOrder(dto.getSortOrder() != null ? dto.getSortOrder() : 1);
-        entity.setIsActive(dto.getIsActive() != null ? dto.getIsActive() : true);
-        entity.setUseOpeningHours(dto.getUseOpeningHours() != null ? dto.getUseOpeningHours() : false);
-        entity.setHasDopo(dto.getHasDopo() != null ? dto.getHasDopo() : true);
-        entity.setHasOdpo(dto.getHasOdpo() != null ? dto.getHasOdpo() : false);
+        entity.setSortOrder(Objects.requireNonNullElse(dto.getSortOrder(), 1));
+        entity.setIsActive(!Boolean.FALSE.equals(dto.getIsActive()));
+        entity.setUseOpeningHours(Boolean.TRUE.equals(dto.getUseOpeningHours()));
+        entity.setHasDopo(!Boolean.FALSE.equals(dto.getHasDopo()));
+        entity.setHasOdpo(Boolean.TRUE.equals(dto.getHasOdpo()));
 
         if (dto.getStartTime() != null && !dto.getStartTime().isEmpty()) {
             entity.setStartTime(LocalTime.parse(dto.getStartTime()));
@@ -192,9 +202,9 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     private PositionHierarchyDto.CategoryNodeDto mapCategoryToNode(MainCategory cat) {
         List<PositionHierarchyDto.StationNodeDto> stationNodes = (cat.getStations() != null)
                 ? cat.getStations().stream()
-                .sorted(Comparator.comparing(s -> s.getSortOrder() == null ? 999 : s.getSortOrder()))
+                .sorted(Comparator.comparing(s -> getSortOrder(s.getSortOrder())))
                 .map(this::mapStationToNode)
-                .collect(Collectors.toList())
+                .toList()
                 : new ArrayList<>();
 
         return PositionHierarchyDto.CategoryNodeDto.builder()
@@ -210,9 +220,9 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     private PositionHierarchyDto.StationNodeDto mapStationToNode(Station stat) {
         List<PositionHierarchyDto.TemplateNodeDto> templateNodes = (stat.getTemplates() != null)
                 ? stat.getTemplates().stream()
-                .sorted(Comparator.comparing(t -> t.getSortOrder() == null ? 999 : t.getSortOrder()))
+                .sorted(Comparator.comparing(t -> getSortOrder(t.getSortOrder())))
                 .map(this::mapTemplateToNode)
-                .collect(Collectors.toList())
+                .toList()
                 : new ArrayList<>();
 
         return PositionHierarchyDto.StationNodeDto.builder()
@@ -241,5 +251,9 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
                 .hasDopo(tmpl.getHasDopo())
                 .hasOdpo(tmpl.getHasOdpo())
                 .build();
+    }
+
+    private int getSortOrder(Integer order) {
+        return Objects.requireNonNullElse(order, DEFAULT_SORT);
     }
 }
