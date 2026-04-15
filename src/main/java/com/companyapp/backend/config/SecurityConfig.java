@@ -3,13 +3,17 @@ package com.companyapp.backend.config;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler;
+import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder; // PŘIDÁNO
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -26,6 +30,40 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
+
+    // ============================================================================================
+    // --- NOVÁ ČÁST: HIERARCHIE ROLÍ ---
+    // ============================================================================================
+
+    /**
+     * 1. Definice hierarchie rolí.
+     * Říká Springu, že nadřazené role automaticky dědí oprávnění podřízených rolí.
+     * Prefix "ROLE_" je vyžadován pro správnou funkci s @PreAuthorize.
+     */
+    @Bean
+    public RoleHierarchy roleHierarchy() {
+        RoleHierarchyImpl roleHierarchy = new RoleHierarchyImpl();
+        String hierarchy = "ROLE_ADMIN > ROLE_MANAGEMENT \n" +
+                "ROLE_MANAGEMENT > ROLE_PLANNER \n" +
+                "ROLE_PLANNER > ROLE_BASIC";
+        roleHierarchy.setHierarchy(hierarchy);
+        return roleHierarchy;
+    }
+
+    /**
+     * 2. Propojení hierarchie s anotacemi @PreAuthorize.
+     * Ujistí se, že při volání hasAnyRole() se vyhodnocuje naše hierarchie nadefinovaná výše.
+     */
+    @Bean
+    static MethodSecurityExpressionHandler methodSecurityExpressionHandler(RoleHierarchy roleHierarchy) {
+        DefaultMethodSecurityExpressionHandler expressionHandler = new DefaultMethodSecurityExpressionHandler();
+        expressionHandler.setRoleHierarchy(roleHierarchy);
+        return expressionHandler;
+    }
+
+    // ============================================================================================
+    // --- STÁVAJÍCÍ KONFIGURACE BEZPEČNOSTI ---
+    // ============================================================================================
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -53,7 +91,7 @@ public class SecurityConfig {
     }
 
     /**
-     * OPRAVA: Použití BCrypt namísto SHA-256.
+     * Použití BCrypt namísto SHA-256.
      * BCrypt automaticky generuje unikátní sůl pro každé heslo a je výpočetně náročný,
      * což chrání uživatele i při úniku databáze.
      */

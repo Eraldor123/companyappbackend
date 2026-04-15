@@ -52,7 +52,8 @@ public class UserServiceImpl implements UserService {
         User user = new User();
         user.setEmail(request.getEmail());
         user.setRoles(request.getAccessLevels());
-        user.setActive(true);
+        // OPRAVA: Použití setIsActive místo setActive
+        user.setIsActive(true);
 
         // 1. Generování PINu pro terminál (zůstává)
         String generatedPin;
@@ -118,7 +119,9 @@ public class UserServiceImpl implements UserService {
     public void deactivateUser(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(userNotFound));
-        user.setActive(false);
+
+        // OPRAVA: Použití setIsActive místo setActive
+        user.setIsActive(false);
         userRepository.save(user);
         log.info("Uživatel {} byl deaktivován. Historie zůstala zachována.", userId);
 

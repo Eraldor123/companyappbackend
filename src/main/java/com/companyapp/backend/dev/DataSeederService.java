@@ -30,7 +30,12 @@ public class DataSeederService {
     public String seedArmy(int count) {
         Faker faker = new Faker(new Locale("cs")); // Česká jména a telefony
         String defaultPassword = passwordEncoder.encode("Heslo123!"); // Všichni budou mít stejné heslo
-        List<Station> allStations = stationRepository.findByIsActiveTrue();
+
+        // Získáme všechna aktivní stanoviště
+        List<Station> allStations = stationRepository.findAll().stream()
+                .filter(s -> Boolean.TRUE.equals(s.getIsActive()))
+                .toList();
+
         LocalDate today = LocalDate.now();
 
         int generatedCount = 0;
@@ -45,12 +50,15 @@ public class DataSeederService {
             user.setEmail(email);
             user.setPassword(defaultPassword);
             user.setPin(passwordEncoder.encode(faker.number().digits(4)));
+
+            // Použití Lombok vygenerovaných setterů
             user.setRoles(Set.of(AccessLevel.BASIC)); // Obyčejný brigádník
-            user.setActive(true);
+            user.setIsActive(true); // Změněno z setActive(true), protože Lombok generuje setIsActive() pro Boolean pole
 
             // 2. Náhodné Kvalifikace (1 až 3 stanoviště pro každého)
             Set<Station> userStations = new HashSet<>();
             if (!allStations.isEmpty()) {
+                // Oprava použití Faker random
                 int numQuals = faker.random().nextInt(1, Math.min(3, allStations.size()) + 1);
                 for (int q = 0; q < numQuals; q++) {
                     userStations.add(allStations.get(faker.random().nextInt(allStations.size())));
@@ -59,7 +67,7 @@ public class DataSeederService {
             user.setQualifiedStations(userStations);
 
             // Uložíme uživatele, abychom získali jeho UUID pro další vazby
-            userRepository.save(user);
+            user = userRepository.save(user); // Zachytíme uloženého usera s UUID
 
             // 3. Vytvoření Profilu
             UserProfile profile = new UserProfile();

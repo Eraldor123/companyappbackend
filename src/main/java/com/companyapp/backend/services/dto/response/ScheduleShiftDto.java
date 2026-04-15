@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -19,8 +20,6 @@ public class ScheduleShiftDto {
     private Integer requiredCapacity;
     private String description;
 
-    // Tady frontend uvidí, kdo už tam je.
-    // Pokud size() < requiredCapacity -> vykreslí červenou
-    // Pokud size() == requiredCapacity -> vykreslí zelenou
-    private List<AssignedUserDto> assignedUsers;
+    @Builder.Default // OCHRANA PROTI NULL - prázdná směna pošle [] a ne null
+    private List<AssignedUserDto> assignedUsers = new ArrayList<>();
 }

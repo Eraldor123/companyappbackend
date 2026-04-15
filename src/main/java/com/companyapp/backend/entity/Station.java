@@ -2,15 +2,18 @@ package com.companyapp.backend.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "stations")
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor // Přidáno pro podporu Builderu
+@Builder // Přidáno pro bezchybnou funkci v servisu a DTO mapování
 public class Station {
 
     @Id
@@ -59,6 +62,29 @@ public class Station {
     @Column(name = "sort_order")
     private Integer sortOrder = 1;
 
+    /**
+     * TATO ČÁST CHYBĚLA: Vazba na šablony směn.
+     * Zajišťuje, že když načteš stanoviště, stáhnou se k němu i jeho šablony.
+     * cascade = ALL a orphanRemoval = true zajistí automatické smazání šablon při smazání stanoviště.
+     */
+    @OneToMany(mappedBy = "station", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @Builder.Default // Zajišťuje, že builder nevytvoří null, ale prázdný ArrayList
+    private List<ShiftTemplate> templates = new ArrayList<>();
+
+    // --- POMOCNÉ METODY PRO KONZISTENCI VAZBY ---
+
+    public void addTemplate(ShiftTemplate template) {
+        templates.add(template);
+        template.setStation(this);
+    }
+
+    public void removeTemplate(ShiftTemplate template) {
+        templates.remove(template);
+        template.setStation(null);
+    }
+
+    // --- STANDARDNÍ METODY ---
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -69,6 +95,7 @@ public class Station {
 
     @Override
     public int hashCode() {
+        // Používáme getClass().hashCode() pro prevenci problémů s Hibernate proxies
         return getClass().hashCode();
     }
 

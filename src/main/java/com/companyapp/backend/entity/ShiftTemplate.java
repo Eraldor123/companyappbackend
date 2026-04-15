@@ -2,9 +2,7 @@ package com.companyapp.backend.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 import java.time.LocalTime;
 
@@ -13,6 +11,8 @@ import java.time.LocalTime;
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor // Přidáno pro podporu Builderu a konzistenci
+@Builder // Přidáno pro konzistenci s ostatními entitami
 public class ShiftTemplate {
 
     @Id
@@ -53,21 +53,26 @@ public class ShiftTemplate {
     private LocalTime endTime2;
 
     @Column(name = "is_active", nullable = false)
+    @Builder.Default
     private Boolean isActive = true;
 
     /**
      * Pořadí pro zobrazení v uživatelském rozhraní.
      */
     @Column(name = "sort_order")
+    @Builder.Default
     private Integer sortOrder = 1;
 
     @Column(name = "use_opening_hours")
+    @Builder.Default
     private Boolean useOpeningHours = false;
 
     @Column(name = "has_dopo")
+    @Builder.Default
     private Boolean hasDopo = true;
 
     @Column(name = "has_odpo")
+    @Builder.Default
     private Boolean hasOdpo = false;
 
     @Override
@@ -80,6 +85,7 @@ public class ShiftTemplate {
 
     @Override
     public int hashCode() {
+        // Používáme getClass().hashCode() pro prevenci problémů s Hibernate proxies
         return getClass().hashCode();
     }
 

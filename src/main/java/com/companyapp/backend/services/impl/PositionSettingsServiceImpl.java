@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -35,10 +36,7 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     @Override
     @Transactional(readOnly = true)
     public PositionHierarchyDto getFullHierarchy() {
-        // Tvá původní logika mapování hierachie zůstává nezměněna...
         List<MainCategory> allCategories = categoryRepository.findAll();
-        List<Station> allStations = stationRepository.findAll();
-
         List<PositionHierarchyDto.CategoryNodeDto> categoryNodes = allCategories.stream()
                 .sorted(Comparator.comparing(c -> c.getSortOrder() == null ? 999 : c.getSortOrder()))
                 .map(this::mapCategoryToNode)
@@ -46,8 +44,6 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
 
         return PositionHierarchyDto.builder().categories(categoryNodes).build();
     }
-
-    // --- IMPLEMENTACE LOGIKY KATEGORIÍ ---
 
     @Override
     @Transactional
@@ -62,7 +58,6 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     public void updateCategory(Integer id, CreateCategoryRequestDto request) {
         MainCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Kategorie nenalezena"));
-
         mapDtoToCategory(request, category);
         categoryRepository.save(category);
     }
@@ -70,17 +65,14 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     @Override
     @Transactional
     public void deleteCategory(Integer id) {
-        List<Station> stations = stationRepository.findAll().stream()
-                .filter(s -> s.getCategory().getId().equals(id))
-                .toList();
+        MainCategory category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Kategorie nenalezena"));
 
-        for (Station s : stations) {
-            deleteStation(s.getId());
+        if (category.getStations() != null) {
+            new ArrayList<>(category.getStations()).forEach(s -> deleteStation(s.getId()));
         }
-        categoryRepository.deleteById(id);
+        categoryRepository.delete(category);
     }
-
-    // --- IMPLEMENTACE LOGIKY STANOVIŠŤ ---
 
     @Override
     @Transactional
@@ -91,7 +83,15 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
         Station station = new Station();
         station.setCategory(category);
         mapDtoToStation(request, station);
-        stationRepository.save(station);
+        Station savedStation = stationRepository.save(station);
+
+        // OPRAVA: Místo setStations použijeme getStations().add()
+        if (category.getStations() == null) {
+            // Tohle by se nemělo stát, pokud máš v Entitě = new ArrayList<>()
+            // ale pro jistotu to tu necháme
+        } else {
+            category.getStations().add(savedStation);
+        }
     }
 
     @Override
@@ -99,7 +99,6 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     public void updateStation(Integer id, CreateStationRequestDto request) {
         Station station = stationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Stanoviště nenalezeno"));
-
         mapDtoToStation(request, station);
         stationRepository.save(station);
     }
@@ -110,22 +109,17 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
         Station station = stationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Stanoviště nenalezeno"));
 
-        // 1. Smažeme šablony
         List<ShiftTemplate> templates = templateRepository.findByStationId(id);
         templateRepository.deleteAll(templates);
 
-        // 2. Odebereme kvalifikace uživatelům
         List<User> qualifiedUsers = userRepository.findAllByQualifiedStationsContains(station);
         for (User user : qualifiedUsers) {
+            // TADY BYLA CHYBA: Ujisti se, že User má metodu getQualifiedStations()
             user.getQualifiedStations().remove(station);
-            userRepository.save(user);
         }
-
-        // 3. Smažeme stanoviště
-        stationRepository.deleteById(id);
+        userRepository.saveAll(qualifiedUsers);
+        stationRepository.delete(station);
     }
-
-    // --- IMPLEMENTACE LOGIKY ŠABLON ---
 
     @Override
     @Transactional
@@ -136,7 +130,12 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
         ShiftTemplate template = new ShiftTemplate();
         template.setStation(station);
         mapDtoToTemplate(request, template);
-        templateRepository.save(template);
+        ShiftTemplate savedTemplate = templateRepository.save(template);
+
+        // OPRAVA: Místo setTemplates použijeme getTemplates().add()
+        if (station.getTemplates() != null) {
+            station.getTemplates().add(savedTemplate);
+        }
     }
 
     @Override
@@ -144,7 +143,6 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     public void updateTemplate(Integer id, CreateTemplateRequestDto request) {
         ShiftTemplate template = templateRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Šablona nenalezena"));
-
         mapDtoToTemplate(request, template);
         templateRepository.save(template);
     }
@@ -155,7 +153,7 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
         templateRepository.deleteById(id);
     }
 
-    // --- POMOCNÉ MAPOVACÍ METODY ---
+    // --- POMOCNÉ METODY ---
 
     private void mapDtoToCategory(CreateCategoryRequestDto dto, MainCategory entity) {
         entity.setName(dto.getName());
@@ -192,13 +190,56 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     }
 
     private PositionHierarchyDto.CategoryNodeDto mapCategoryToNode(MainCategory cat) {
-        // Tady by pokračovalo mapování pro getHierarchy (viz tvůj původní kód v kontroleru)
+        List<PositionHierarchyDto.StationNodeDto> stationNodes = (cat.getStations() != null)
+                ? cat.getStations().stream()
+                .sorted(Comparator.comparing(s -> s.getSortOrder() == null ? 999 : s.getSortOrder()))
+                .map(this::mapStationToNode)
+                .collect(Collectors.toList())
+                : new ArrayList<>();
+
         return PositionHierarchyDto.CategoryNodeDto.builder()
                 .id(cat.getId())
                 .name(cat.getName())
                 .color(cat.getHexColor())
                 .isActive(cat.getIsActive())
                 .sortOrder(cat.getSortOrder())
+                .stations(stationNodes)
+                .build();
+    }
+
+    private PositionHierarchyDto.StationNodeDto mapStationToNode(Station stat) {
+        List<PositionHierarchyDto.TemplateNodeDto> templateNodes = (stat.getTemplates() != null)
+                ? stat.getTemplates().stream()
+                .sorted(Comparator.comparing(t -> t.getSortOrder() == null ? 999 : t.getSortOrder()))
+                .map(this::mapTemplateToNode)
+                .collect(Collectors.toList())
+                : new ArrayList<>();
+
+        return PositionHierarchyDto.StationNodeDto.builder()
+                .id(stat.getId())
+                .name(stat.getName())
+                .isActive(stat.getIsActive())
+                .capacityLimit(stat.getCapacityLimit())
+                .needsQualification(stat.getNeedsQualification())
+                .sortOrder(stat.getSortOrder())
+                .templates(templateNodes)
+                .build();
+    }
+
+    private PositionHierarchyDto.TemplateNodeDto mapTemplateToNode(ShiftTemplate tmpl) {
+        return PositionHierarchyDto.TemplateNodeDto.builder()
+                .id(tmpl.getId())
+                .name(tmpl.getName())
+                .workersNeeded(tmpl.getWorkersNeeded())
+                .startTime(tmpl.getStartTime() != null ? tmpl.getStartTime().toString() : null)
+                .endTime(tmpl.getEndTime() != null ? tmpl.getEndTime().toString() : null)
+                .startTime2(tmpl.getStartTime2() != null ? tmpl.getStartTime2().toString() : null)
+                .endTime2(tmpl.getEndTime2() != null ? tmpl.getEndTime2().toString() : null)
+                .isActive(tmpl.getIsActive())
+                .sortOrder(tmpl.getSortOrder())
+                .useOpeningHours(tmpl.getUseOpeningHours())
+                .hasDopo(tmpl.getHasDopo())
+                .hasOdpo(tmpl.getHasOdpo())
                 .build();
     }
 }

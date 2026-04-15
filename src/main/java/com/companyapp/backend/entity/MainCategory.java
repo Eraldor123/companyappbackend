@@ -3,23 +3,21 @@ package com.companyapp.backend.entity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "main_categories")
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor // Přidáno pro podporu Builderu
+@Builder // Přidáno pro bezchybnou funkci v PositionSettingsServiceImpl
 public class MainCategory {
 
     @Id
-    /**
-     * FÁZE 2: Optimalizace transakcí u generátorů ID.
-     * Změna z IDENTITY na SEQUENCE pro podporu batchingu v Hibernate 6.
-     * allocationSize = 50 zajišťuje, že se ID nepoptávají v DB po jednom, což šetří výkon.
-     */
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "main_category_seq")
     @SequenceGenerator(
             name = "main_category_seq",
@@ -32,25 +30,39 @@ public class MainCategory {
     @Column(name = "name", nullable = false)
     private String name;
 
-    /**
-     * HEX kód barvy pro zobrazení kategorie. Musí být ve formátu #RRGGBB nebo #RGB.
-     */
     @Pattern(regexp = "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$",
             message = "Kód barvy musí být platný HEX formát začínající mřížkou a obsahující 3 nebo 6 znaků.")
     @Column(name = "hex_color")
     private String hexColor;
 
-    /**
-     * Pořadí pro zobrazení v uživatelském rozhraní.
-     */
     @Column(name = "sort_order")
     private Integer sortOrder = 1;
 
-    /**
-     * Indikátor, zda je kategorie aktivní.
-     */
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
+
+    /**
+     * TATO ČÁST CHYBĚLA: Vazba na stanoviště.
+     * cascade = ALL a orphanRemoval = true zajistí, že při smazání kategorie
+     * zmizí i její stanoviště.
+     */
+    @OneToMany(mappedBy = "category", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @Builder.Default // Zajišťuje, že builder nevytvoří null, ale prázdný ArrayList
+    private List<Station> stations = new ArrayList<>();
+
+    // --- POMOCNÉ METODY PRO KONZISTENCI VAZBY ---
+
+    public void addStation(Station station) {
+        stations.add(station);
+        station.setCategory(this);
+    }
+
+    public void removeStation(Station station) {
+        stations.remove(station);
+        station.setCategory(null);
+    }
+
+    // --- STANDARDNÍ METODY ---
 
     @Override
     public boolean equals(Object o) {
@@ -62,10 +74,10 @@ public class MainCategory {
 
     @Override
     public int hashCode() {
+        // Používáme třídu pro stabilitu v Hibernate
         return getClass().hashCode();
     }
 
-    // Ponecháno pro kompatibilitu se stávajícím kódem
     public void setActive(boolean b) {
         this.isActive = b;
     }

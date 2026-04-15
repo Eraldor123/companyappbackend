@@ -2,6 +2,8 @@ package com.companyapp.backend.services.dto.response;
 
 import lombok.Builder;
 import lombok.Data;
+
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -13,5 +15,7 @@ public class EmployeeQualificationDto {
     private String lastName;
     private String contractType;
     private String photoUrl;
-    private List<Integer> qualifiedStationIds;
+
+    @Builder.Default // OCHRANA PROTI NULL
+    private List<Integer> qualifiedStationIds = new ArrayList<>();
 }

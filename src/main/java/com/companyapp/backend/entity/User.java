@@ -4,14 +4,12 @@ import com.companyapp.backend.enums.AccessLevel;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.Set;
 import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -19,6 +17,8 @@ import java.util.UUID;
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor // Přidáno pro lepší kompatibilitu s Builderem
+@Builder // Přidáno pro snadnější vytváření testovacích dat
 public class User {
 
     @Id
@@ -35,22 +35,26 @@ public class User {
     @Column(name = "pin", nullable = false)
     private String pin;
 
+    /**
+     * Heslo pro webové rozhraní.
+     * Poznámka k chybě 'Cannot resolve column':
+     * Pokud IntelliJ svítí červeně, ujisti se, že v databázi v tabulce 'users'
+     * tento sloupec skutečně existuje.
+     */
     @Column(name = "password")
     private String password;
 
-    /**
-     * FÁZE 2: Změněno z EAGER na LAZY.
-     * Role uživatele se nyní načtou pouze tehdy, když jsou skutečně potřeba.
-     */
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false)
     private Set<AccessLevel> roles = new HashSet<>();
 
-    @Column(name = "is_active", nullable = false)
-    private Boolean isActive = true;
-
+    /**
+     * Seznam stanovišť, na která je uživatel kvalifikován.
+     * DŮLEŽITÉ: Lombok díky @Getter vygeneruje metodu getQualifiedStations(),
+     * kterou vyžaduje tvůj PositionSettingsServiceImpl.
+     */
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "user_qualified_stations",
@@ -59,22 +63,35 @@ public class User {
     )
     private Set<Station> qualifiedStations = new HashSet<>();
 
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    /**
-     * FÁZE 2: Změněno na LAZY.
-     */
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, optional = true, fetch = FetchType.LAZY)
     private UserProfile userProfile;
 
-    /**
-     * FÁZE 2: Změněno na LAZY.
-     */
     @OneToOne(mappedBy = "user", optional = true, fetch = FetchType.LAZY)
     private PasswordResetToken passwordResetToken;
 
+    // --- HELPER METODY ---
+
+    public boolean isActive() {
+        return Boolean.TRUE.equals(this.isActive);
+    }
+
+    public String getLastName() {
+        return userProfile != null ? userProfile.getLastName() : null;
+    }
+
+    public String getFirstName() {
+        return userProfile != null ? userProfile.getFirstName() : null;
+    }
+
+    // --- JPA SPECIFICKÉ EQUALS/HASHCODE ---
+    // Používáme pouze ID, aby nedocházelo k cyklení s kolekcemi (StackOverflow)
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -85,25 +102,5 @@ public class User {
     @Override
     public int hashCode() {
         return getClass().hashCode();
-    }
-
-    public void setActive(boolean b) {
-        this.isActive = b;
-    }
-
-    public boolean isActive() {
-        return Boolean.TRUE.equals(this.isActive);
-    }
-
-    // Metody getPinHash() a getPasswordHash() byly odstraněny,
-    // protože jen mátly a využívaly starý HashUtil.
-    // Pro získání hashe nyní stačí standardní getPin() a getPassword().
-
-    public String getLastName() {
-        return userProfile != null ? userProfile.getLastName() : null;
-    }
-
-    public String getFirstName() {
-        return userProfile != null ? userProfile.getFirstName() : null;
     }
 }

@@ -1,14 +1,18 @@
 package com.companyapp.backend.services.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonProperty; // TENTO IMPORT JE DŮLEŽITÝ
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
+
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
 @Builder
 public class PositionHierarchyDto {
-    private List<CategoryNodeDto> categories;
+
+    @Builder.Default // OCHRANA PROTI NULL
+    private List<CategoryNodeDto> categories = new ArrayList<>();
 
     @Data
     @Builder
@@ -17,10 +21,11 @@ public class PositionHierarchyDto {
         private String name;
         private String color;
 
-        @JsonProperty("isActive") // OPRAVA: Vynutí přesný název v JSONu
+        @JsonProperty("isActive")
         private Boolean isActive;
 
-        private List<StationNodeDto> stations;
+        @Builder.Default // OCHRANA PROTI NULL
+        private List<StationNodeDto> stations = new ArrayList<>();
         private Integer sortOrder;
     }
 
@@ -30,13 +35,14 @@ public class PositionHierarchyDto {
         private Integer id;
         private String name;
 
-        @JsonProperty("isActive") // OPRAVA
+        @JsonProperty("isActive")
         private Boolean isActive;
 
-        private List<TemplateNodeDto> templates;
+        @Builder.Default // OCHRANA PROTI NULL
+        private List<TemplateNodeDto> templates = new ArrayList<>();
         private Integer capacityLimit;
         private Boolean needsQualification;
-        private Integer sortOrder; // Přidáno pro řazení
+        private Integer sortOrder;
     }
 
     @Data
@@ -51,10 +57,10 @@ public class PositionHierarchyDto {
         private String endTime2;
         private Integer workersNeeded;
 
-        @JsonProperty("isActive") // OPRAVA
+        @JsonProperty("isActive")
         private Boolean isActive;
 
-        private Integer sortOrder; // Přidáno pro řazení
+        private Integer sortOrder;
         private Boolean useOpeningHours;
         private Boolean hasDopo;
         private Boolean hasOdpo;
