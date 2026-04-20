@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
@@ -63,14 +64,24 @@ public class ShiftServiceImpl implements ShiftService {
         Shift originalShift = shiftRepository.findById(shiftId)
                 .orElseThrow(() -> new ResourceNotFoundException(SHIFT_NOT_FOUND));
 
+        // 1. Získáme dynamický zlomový čas z nastavení stanoviště
+        LocalTime splitLocalTime = originalShift.getStation().getAfternoonStartTime();
+
+        // Bezpečnostní pojistka: Kdyby stanoviště nemělo zlom vyplněný, použijeme defaultních 14:00
+        if (splitLocalTime == null) {
+            splitLocalTime = LocalTime.of(14, 0);
+        }
+
+        // 2. Namapujeme tento čas na konkrétní den směny
         ZonedDateTime splitTime = originalShift.getStartTime()
                 .withZoneSameInstant(PRAGUE_ZONE)
-                .withHour(14)
-                .withMinute(0)
+                .withHour(splitLocalTime.getHour())
+                .withMinute(splitLocalTime.getMinute())
                 .withSecond(0)
                 .withNano(0)
                 .withZoneSameInstant(UTC_ZONE);
 
+        // 3. Kontrola: Můžeme směnu rozdělit jen pokud skutečně protíná tento čas
         if (originalShift.getStartTime().isBefore(splitTime) && originalShift.getEndTime().isAfter(splitTime)) {
             Shift newShift = new Shift();
             newShift.setStation(originalShift.getStation());
@@ -78,6 +89,9 @@ public class ShiftServiceImpl implements ShiftService {
             newShift.setStartTime(splitTime);
             newShift.setEndTime(originalShift.getEndTime());
             newShift.setShiftDate(originalShift.getShiftDate());
+
+            // Zachováme případný popisek ("Akce, Úklid...")
+            newShift.setDescription(originalShift.getDescription());
 
             shiftRepository.save(newShift);
 
@@ -88,11 +102,12 @@ public class ShiftServiceImpl implements ShiftService {
                     "SPLIT_SHIFT",
                     ENTITY_NAME,
                     originalShift.getId().toString(),
-                    "Směna rozdělena ve 14:00. Nová směna ID: " + newShift.getId()
+                    "Směna rozdělena dynamicky v " + splitLocalTime + ". Nová směna ID: " + newShift.getId()
             );
 
         } else {
-            throw new IllegalStateException("Tuto směnu nelze rozdělit (neobsahuje čas 14:00).");
+            // Pokud např. směna začíná v 15:00, ale zlom je ve 14:00, vyhodí to hezkou chybovou hlášku
+            throw new IllegalStateException("Tuto směnu nelze rozdělit (neobsahuje zlomový čas " + splitLocalTime + ").");
         }
     }
 

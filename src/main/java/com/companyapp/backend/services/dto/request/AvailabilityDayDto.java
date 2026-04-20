@@ -1,5 +1,6 @@
 package com.companyapp.backend.services.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
@@ -19,8 +20,10 @@ public class AvailabilityDayDto {
     private LocalDate date;
 
     @JsonProperty("morning")
+    @JsonAlias("hasMorningShift")
     private boolean morning;
 
     @JsonProperty("afternoon")
+    @JsonAlias("hasAfternoonShift")
     private boolean afternoon;
 }

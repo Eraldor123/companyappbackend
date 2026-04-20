@@ -5,13 +5,16 @@ import com.companyapp.backend.repository.*;
 import com.companyapp.backend.services.AuditLogService;
 import com.companyapp.backend.services.AutoPlanService;
 import com.companyapp.backend.services.ShiftAssignmentService;
+import com.companyapp.backend.services.OperatingHoursService; // PŘIDÁNO
 import com.companyapp.backend.services.dto.request.AutoPlanRequestDto;
+import com.companyapp.backend.services.dto.request.PauseRuleDto; // PŘIDÁNO
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -30,6 +33,7 @@ public class AutoPlanServiceImpl implements AutoPlanService {
     private final ShiftAssignmentRepository shiftAssignmentRepository;
     private final ShiftAssignmentService shiftAssignmentService;
     private final AuditLogService auditLogService;
+    private final OperatingHoursService operatingHoursService; // PŘIDÁNO: Pro přístup k pravidlům pauz
 
     @Override
     @Transactional
@@ -52,12 +56,16 @@ public class AutoPlanServiceImpl implements AutoPlanService {
 
         List<User> users = userRepository.findAllActiveUsersWithDetails(PageRequest.of(0, Integer.MAX_VALUE)).getContent();
         List<Availability> avails = availabilityRepository.findByDateRange(start, end);
-        List<ShiftAssignment> allAssignmentsInPeriod = shiftAssignmentRepository.findByShiftDateBetween(start, end);
+        List<ShiftAssignment> allAssignmentsInPeriod = new ArrayList<>(shiftAssignmentRepository.findByShiftDateBetween(start, end));
 
         Map<UUID, Long> userShiftCounts = allAssignmentsInPeriod.stream()
                 .collect(Collectors.groupingBy(sa -> sa.getEmployee().getId(), Collectors.counting()));
 
         shifts.sort(Comparator.comparing(Shift::getStartTime));
+
+        // NOVÉ: Načtení povoleného překryvu z modulu Pravidla pauz
+        int allowedOverlapMinutes = getDynamicOverlapLimit();
+        log.info("AutoPlan používá limit překryvu: {} min (načteno z nastavení areálu)", allowedOverlapMinutes);
 
         int successfulAssignments = 0;
 
@@ -66,12 +74,20 @@ public class AutoPlanServiceImpl implements AutoPlanService {
             int slotsToFill = shift.getRequiredCapacity() - currentAssigned;
 
             for (int i = 0; i < slotsToFill; i++) {
-                User best = findBestCandidate(shift, users, avails, allAssignmentsInPeriod, userShiftCounts, request);
+                User best = findBestCandidate(shift, users, avails, allAssignmentsInPeriod, userShiftCounts, request, allowedOverlapMinutes);
                 if (best != null) {
                     try {
                         shiftAssignmentService.assignShift(shift.getId(), best.getId());
                         successfulAssignments++;
                         userShiftCounts.merge(best.getId(), 1L, Long::sum);
+
+                        ShiftAssignment tempAssignment = new ShiftAssignment();
+                        tempAssignment.setShift(shift);
+                        tempAssignment.setEmployee(best);
+                        tempAssignment.setStartTime(shift.getStartTime().toLocalDateTime());
+                        tempAssignment.setEndTime(shift.getEndTime().toLocalDateTime());
+                        allAssignmentsInPeriod.add(tempAssignment);
+
                     } catch (Exception e) {
                         log.warn("Přiřazení selhalo pro {}: {}", best.getLastName(), e.getMessage());
                     }
@@ -89,19 +105,29 @@ public class AutoPlanServiceImpl implements AutoPlanService {
 
     private User findBestCandidate(Shift shift, List<User> users, List<Availability> avails,
                                    List<ShiftAssignment> allAssignments, Map<UUID, Long> userShiftCounts,
-                                   AutoPlanRequestDto req) {
+                                   AutoPlanRequestDto req, int overlapLimit) {
         User best = null;
         double maxScore = -1.0;
 
         for (User user : users) {
-            // OPRAVA java:S135: Sloučení kontrol do jedné podmínky místo více příkazů 'continue'
+            boolean isAlreadyOnThisShift = shift.getAssignments().stream()
+                    .anyMatch(a -> a.getEmployee().getId().equals(user.getId()));
+
+            boolean isAlreadyOnThisShiftLocal = allAssignments.stream()
+                    .anyMatch(sa -> sa.getShift().getId().equals(shift.getId()) && sa.getEmployee().getId().equals(user.getId()));
+
+            if (isAlreadyOnThisShift || isAlreadyOnThisShiftLocal) {
+                continue;
+            }
+
             boolean available = isUserAvailable(user, shift, avails);
+
+            // NOVÉ: Předání dynamického limitu do metody pro kontrolu překryvu
             boolean hasOverlap = allAssignments.stream()
                     .filter(sa -> sa.getEmployee().getId().equals(user.getId()))
-                    .anyMatch(sa -> isOverlapping(sa, shift));
+                    .anyMatch(sa -> isOverlapping(sa, shift, overlapLimit));
 
             if (available && !hasOverlap) {
-                // Výpočet skóre proběhne jen pro validní kandidáty
                 double totalScore = calculateScore(user, shift, userShiftCounts, req);
 
                 if (totalScore > maxScore) {
@@ -113,9 +139,6 @@ public class AutoPlanServiceImpl implements AutoPlanService {
         return best;
     }
 
-    /**
-     * Pomocná metoda pro výpočet skóre - oddělení logiky zvyšuje čitelnost.
-     */
     private double calculateScore(User user, Shift shift, Map<UUID, Long> userShiftCounts, AutoPlanRequestDto req) {
         boolean isQualified = user.getQualifiedStations().stream()
                 .anyMatch(s -> s.getId().equals(shift.getStation().getId()));
@@ -130,21 +153,43 @@ public class AutoPlanServiceImpl implements AutoPlanService {
         return trainingScore + fairnessScore + morningBonus;
     }
 
-    private boolean isOverlapping(ShiftAssignment sa, Shift shift) {
+    private boolean isOverlapping(ShiftAssignment sa, Shift shift, int limitMinutes) {
         LocalDateTime startA = sa.getStartTime();
         LocalDateTime endA = sa.getEndTime();
         LocalDateTime startB = shift.getStartTime().toLocalDateTime();
         LocalDateTime endB = shift.getEndTime().toLocalDateTime();
 
-        return startA.isBefore(endB.minusMinutes(1)) && startB.isBefore(endA.minusMinutes(1));
+        if (!startA.isBefore(endB) || !startB.isBefore(endA)) {
+            return false;
+        }
+
+        LocalDateTime overlapStart = startA.isAfter(startB) ? startA : startB;
+        LocalDateTime overlapEnd = endA.isBefore(endB) ? endA : endB;
+
+        long overlapMinutes = Duration.between(overlapStart, overlapEnd).toMinutes();
+
+        // Dynamické vyhodnocení podle načteného limitu (např. 30 min)
+        return overlapMinutes > limitMinutes;
     }
 
     private boolean isUserAvailable(User user, Shift shift, List<Availability> avails) {
         return avails.stream()
                 .filter(a -> a.getUserId().equals(user.getId()) && a.getAvailableDate().equals(shift.getShiftDate()))
                 .anyMatch(a -> {
-                    ZonedDateTime localStart = shift.getStartTime().withZoneSameInstant(ZoneId.of("Europe/Prague"));
-                    return localStart.getHour() < 12 ? a.isMorning() : a.isAfternoon();
+                    return shift.getStartTime().getHour() < 12 ? a.isMorning() : a.isAfternoon();
                 });
+    }
+
+    /**
+     * POMOCNÁ METODA: Načte limit pauzy z OperatingHoursService.
+     */
+    private int getDynamicOverlapLimit() {
+        try {
+            PauseRuleDto rule = operatingHoursService.getPauseRule();
+            return (rule != null && rule.getPauseMinutes() != null) ? rule.getPauseMinutes() : 30;
+        } catch (Exception e) {
+            log.error("Nepodařilo se načíst dynamická pravidla pauz: {}", e.getMessage());
+            return 30; // Bezpečný fallback
+        }
     }
 }

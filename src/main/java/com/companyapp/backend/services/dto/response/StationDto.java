@@ -2,6 +2,9 @@ package com.companyapp.backend.services.dto.response;
 
 import lombok.Builder;
 import lombok.Data;
+
+import java.time.LocalTime;
+
 @SuppressWarnings("unused")
 @Data
 @Builder
@@ -14,4 +17,5 @@ public class StationDto {
     private Integer reqQualificationId;
     private String reqQualificationName;
     private Boolean isActive;
+    private LocalTime afternoonStartTime;
 }

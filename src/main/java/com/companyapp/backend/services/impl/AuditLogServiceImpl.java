@@ -5,18 +5,20 @@ import com.companyapp.backend.repository.AuditLogRepository;
 import com.companyapp.backend.services.AuditLogService;
 import com.companyapp.backend.services.dto.response.AuditLogDto;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j; // PŘIDÁNO
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
-@Slf4j // PŘIDÁNO pro čistší logování
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuditLogServiceImpl implements AuditLogService {
@@ -26,26 +28,52 @@ public class AuditLogServiceImpl implements AuditLogService {
     @Override
     @Transactional(readOnly = true)
     public Page<AuditLogDto> getAllLogs(Pageable pageable) {
+        // Pro zpětnou kompatibilitu volá původní metodu bez filtrů
         Page<AuditLog> logs = auditLogRepository.findAll(pageable);
         return logs.map(this::mapToDto);
     }
 
     /**
-     * OPRAVA: Pokud bean 'auditTaskExecutor' neexistuje, změň na @Async bez parametru
-     * nebo prověř svůj AsyncConfig.
+     * NOVÉ: Metoda pro filtrovaný a stránkovaný výpis logů.
      */
+    @Transactional(readOnly = true)
+    public Page<AuditLogDto> getAllLogsFiltered(Pageable pageable, String search, String module) {
+        Page<AuditLog> logs;
+
+        boolean hasSearch = search != null && !search.trim().isEmpty();
+        boolean hasModule = module != null && !module.trim().isEmpty();
+
+        if (hasSearch || hasModule) {
+            // Ošetření chyby bytea: posíláme prázdný string "" místo null
+            String searchParam = hasSearch ? search.toLowerCase() : "";
+            String moduleParam = hasModule ? module : "";
+
+            logs = auditLogRepository.findFilteredLogs(searchParam, moduleParam, pageable);
+        } else {
+            logs = auditLogRepository.findAll(pageable);
+        }
+
+        return logs.map(this::mapToDto);
+    }
+
     @Async("auditTaskExecutor")
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logAction(String action, String entityName, String entityId, String details) {
         String currentUser = "System";
         try {
-            if (SecurityContextHolder.getContext().getAuthentication() != null) {
-                currentUser = SecurityContextHolder.getContext().getAuthentication().getName();
+            // VYLEPŠENÍ: Robustnější zjištění uživatele (počítá i s CustomUserDetails)
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+            if (auth != null && auth.isAuthenticated() && !auth.getPrincipal().equals("anonymousUser")) {
+                Object principal = auth.getPrincipal();
+                if (principal instanceof UserDetails) {
+                    currentUser = ((UserDetails) principal).getUsername(); // Vytáhne bezpečně e-mail
+                } else {
+                    currentUser = auth.getName();
+                }
             }
         } catch (Exception e) {
-            // OPRAVA: Vyřešení prázdného catch bloku.
-            // Logujeme pro debug účely, ale nebráníme uložení logu (Fallback na "System").
             log.debug("Nepodařilo se získat uživatele ze SecurityContextu: {}", e.getMessage());
         }
 

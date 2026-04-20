@@ -48,6 +48,13 @@ public class ShiftAssignmentServiceImpl implements ShiftAssignmentService {
     public ShiftAssignmentDto assignShift(UUID shiftId, @CheckOwnership UUID userId) {
         log.info("Zahajuji proces přiřazení směny {} pro uživatele {}", shiftId, userId);
 
+        // 1. Zjistit, jestli už uživatel na směně není (Prevence unique constraint violation)
+        boolean alreadyAssigned = shiftAssignmentRepository.existsByShiftIdAndEmployeeId(shiftId, userId);
+        if (alreadyAssigned) {
+            log.warn("Uživatel {} už je přiřazen ke směně {}. Přeskakuji.", userId, shiftId);
+            return null; // Tímto se transakce nepřeruší, pouze se tento krok ignoruje
+        }
+
         Shift shift = shiftRepository.findByIdWithLock(shiftId)
                 .orElseThrow(() -> new ResourceNotFoundException(SHIFT_NOT_FOUND));
 

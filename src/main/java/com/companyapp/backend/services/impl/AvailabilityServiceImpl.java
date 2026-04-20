@@ -19,9 +19,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -45,9 +47,29 @@ public class AvailabilityServiceImpl implements AvailabilityService {
         List<Availability> entityList = repository.findByUserIdAndDateRange(userId, startDate, endDate);
         List<ShiftAssignment> assignments = shiftAssignmentRepository.findAssignmentsForUsersInDateRange(List.of(userId), startDate, endDate);
 
-        return entityList.stream()
-                .map(entity -> mapToAvailabilityDTO(entity, assignments))
-                .toList();
+        Map<LocalDate, AvailabilityDTO> dtoMap = new HashMap<>();
+
+        // 1. Zpracujeme dny fyzicky uložené v tabulce Availabilities
+        for (Availability entity : entityList) {
+            dtoMap.put(entity.getAvailableDate(), mapToAvailabilityDTO(entity, assignments));
+        }
+
+        // 2. Doplníme "virtuální" dostupnost pro dny se směnou, kterou uživatel v kalendáři nepotvrdil
+        for (ShiftAssignment sa : assignments) {
+            LocalDate shiftDate = sa.getShift().getShiftDate();
+            if (!dtoMap.containsKey(shiftDate)) {
+                Availability dummyEntity = new Availability();
+                dummyEntity.setUserId(userId);
+                dummyEntity.setAvailableDate(shiftDate);
+                dummyEntity.setMorning(isMorningShift(sa));
+                dummyEntity.setAfternoon(isAfternoonShift(sa));
+                dummyEntity.setConfirmed(true);
+
+                dtoMap.put(shiftDate, mapToAvailabilityDTO(dummyEntity, assignments));
+            }
+        }
+
+        return new ArrayList<>(dtoMap.values());
     }
 
     @Override
@@ -75,17 +97,36 @@ public class AvailabilityServiceImpl implements AvailabilityService {
     }
 
     // =========================================================================
-    // EXTRAHOVANÁ LOGIKA (OPRAVA DUPLIKACÍ)
+    // DYNAMICKÁ LOGIKA PODLE NASTAVENÍ AREÁLU (MODÁLU)
     // =========================================================================
 
     private boolean isMorningShift(ShiftAssignment sa) {
-        return sa.getStartTime().atZone(UTC_ZONE).getHour() < 12;
+        LocalTime shiftStart = sa.getStartTime().atZone(UTC_ZONE).toLocalTime();
+        LocalTime changeTime = getSplitTime(sa);
+
+        // Ranní je ta, co začíná PŘED zlomovým časem (např. před 14:00)
+        return shiftStart.isBefore(changeTime);
     }
 
     private boolean isAfternoonShift(ShiftAssignment sa) {
-        ZonedDateTime start = sa.getStartTime().atZone(UTC_ZONE);
-        ZonedDateTime end = sa.getEndTime().atZone(UTC_ZONE);
-        return end.getHour() >= 14 || start.getHour() >= 12;
+        LocalTime shiftStart = sa.getStartTime().atZone(UTC_ZONE).toLocalTime();
+        LocalTime shiftEnd = sa.getEndTime().atZone(UTC_ZONE).toLocalTime();
+        LocalTime changeTime = getSplitTime(sa);
+
+        // Odpolední je ta, co končí PO zlomovém čase, NEBO přesně v tento čas začíná
+        return shiftEnd.isAfter(changeTime) || shiftStart.equals(changeTime) || shiftStart.isAfter(changeTime);
+    }
+
+    // Bezpečné získání "Zlomu směn" z databáze
+    private LocalTime getSplitTime(ShiftAssignment sa) {
+        if (sa.getShift() != null &&
+                sa.getShift().getStation() != null &&
+                sa.getShift().getStation().getAfternoonStartTime() != null) {
+
+            return sa.getShift().getStation().getAfternoonStartTime();
+        }
+        // Fallback pro staré směny/stanice, které tento údaj ještě nemají
+        return LocalTime.of(14, 0);
     }
 
     // =========================================================================

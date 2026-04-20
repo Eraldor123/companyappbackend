@@ -12,4 +12,5 @@ public class SeasonalRegimeDto {
     private String dopoEnd;
     private String odpoStart;
     private String odpoEnd;
+    private Boolean isActive;
 }

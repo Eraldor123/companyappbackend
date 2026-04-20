@@ -34,33 +34,35 @@ public class QualificationServiceImpl implements QualificationService {
     private final ContractRepository contractRepository;
     private final AuditLogService auditLogService;
 
-    // KONSTANTY PRO CHYBOVÉ HLÁŠKY (java:S1192)
     private static final String USER_NOT_FOUND = "Uživatel nenalezen.";
     private static final String STATION_NOT_FOUND = "Stanoviště nenalezeno.";
 
     @Override
     @Transactional(readOnly = true)
     public Page<EmployeeQualificationDto> getAllEmployeesWithStations(Pageable pageable) {
-        Page<User> userPage = userRepository.findAllActiveUsersWithDetails(pageable);
+        return getAllEmployeesWithStationsFiltered(pageable, null, "VŠE");
+    }
 
-        return userPage.map(user -> {
-            UserProfile profile = user.getUserProfile();
-            Contract contract = contractRepository.findLatestContractByUserId(user.getId()).orElse(null);
+    @Override
+    @Transactional(readOnly = true)
+    public Page<EmployeeQualificationDto> getAllEmployeesWithStationsFiltered(Pageable pageable, String search, String contractType) {
+        Page<User> userPage;
 
-            // OPRAVA java:S6204: Použití .toList() místo .collect(Collectors.toList())
-            List<Integer> stationIds = user.getQualifiedStations().stream()
-                    .map(Station::getId)
-                    .toList();
+        boolean hasSearch = search != null && !search.trim().isEmpty();
+        boolean hasContractFilter = contractType != null && !contractType.equalsIgnoreCase("VŠE") && !contractType.trim().isEmpty();
 
-            return EmployeeQualificationDto.builder()
-                    .id(user.getId())
-                    .firstName(profile != null ? profile.getFirstName() : "Neznámé")
-                    .lastName(profile != null ? profile.getLastName() : "Neznámé")
-                    .contractType(contract != null ? contract.getType().name() : "N/A")
-                    .photoUrl(profile != null ? profile.getProfilePictureUrl() : "")
-                    .qualifiedStationIds(stationIds)
-                    .build();
-        });
+        if (hasSearch || hasContractFilter) {
+            // OPRAVA BYTEA CHYBY: Posíláme prázdný string "" místo null
+            // Databáze tak ví, že jde na 100 % o textová pole.
+            String searchParam = hasSearch ? search.toLowerCase() : "";
+            String contractParam = hasContractFilter ? contractType : "";
+
+            userPage = userRepository.findFilteredActiveUsersWithDetails(searchParam, contractParam, pageable);
+        } else {
+            userPage = userRepository.findAllActiveUsersWithDetails(pageable);
+        }
+
+        return mapUserPageToDto(userPage);
     }
 
     @Override
@@ -97,7 +99,6 @@ public class QualificationServiceImpl implements QualificationService {
         Station station = stationRepository.findById(stationId)
                 .orElseThrow(() -> new ResourceNotFoundException(STATION_NOT_FOUND));
 
-        // Bezpečné vyhodnocení Booleanu
         if (Boolean.FALSE.equals(station.getNeedsQualification())) {
             return true;
         }
@@ -106,5 +107,25 @@ public class QualificationServiceImpl implements QualificationService {
                 .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND));
 
         return user.getQualifiedStations().contains(station);
+    }
+
+    private Page<EmployeeQualificationDto> mapUserPageToDto(Page<User> userPage) {
+        return userPage.map(user -> {
+            UserProfile profile = user.getUserProfile();
+            Contract contract = contractRepository.findLatestContractByUserId(user.getId()).orElse(null);
+
+            List<Integer> stationIds = user.getQualifiedStations().stream()
+                    .map(Station::getId)
+                    .toList();
+
+            return EmployeeQualificationDto.builder()
+                    .id(user.getId())
+                    .firstName(profile != null ? profile.getFirstName() : "Neznámé")
+                    .lastName(profile != null ? profile.getLastName() : "Neznámé")
+                    .contractType(contract != null ? contract.getType().name() : "N/A")
+                    .photoUrl(profile != null ? profile.getProfilePictureUrl() : "")
+                    .qualifiedStationIds(stationIds)
+                    .build();
+        });
     }
 }

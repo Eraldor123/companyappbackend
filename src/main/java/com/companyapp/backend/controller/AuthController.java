@@ -11,6 +11,7 @@ import com.companyapp.backend.services.dto.response.AuthResponseDto;
 import com.companyapp.backend.services.dto.response.UserProfileDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
@@ -19,14 +20,17 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Duration;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
@@ -39,30 +43,38 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponseDto> login(@Valid @RequestBody AuthRequestDto request) {
+        // 1. Ověření uživatele (pokud heslo nesedí, vyhodí výjimku BadCredentialsException)
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
         );
 
         CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
-        User user = userRepository.findByEmailAndIsActiveTrue(request.getEmail())
-                .orElseThrow(); // Zde by mohl být ResourceNotFoundException
 
+        // 2. Bezpečné načtení uživatele s vlastní výjimkou pro čisté logy
+        User user = userRepository.findByEmailAndIsActiveTrue(request.getEmail())
+                .orElseThrow(() -> new UsernameNotFoundException("Uživatel s tímto emailem nebyl nalezen nebo je neaktivní."));
+
+        // 3. Vygenerování JWT tokenu
         String jwtToken = jwtService.generateToken(userDetails);
 
-        // --- VYTVOŘENÍ BEZPEČNÉ HTTP-ONLY COOKIE ---
+        // 4. Vytvoření bezpečné HttpOnly Cookie (PARALELNÍ BĚH - NOVÝ SYSTÉM)
         ResponseCookie jwtCookie = ResponseCookie.from("jwt", jwtToken)
                 .httpOnly(true)
-                .secure(false) // V produkci (HTTPS) změnit na true
+                .secure(false) // TODO: V produkci (při nasazení s HTTPS) změnit na true!
                 .path("/")
-                .maxAge(24L * 60 * 60)
+                .maxAge(Duration.ofDays(1)) // Čistší a bezpečnější zápis pro 24 hodin
                 .sameSite("Lax")
                 .build();
 
-        // OPRAVA: Moderní stream pro Set rolí
         Set<String> roles = user.getRoles().stream()
                 .map(Enum::name)
                 .collect(Collectors.toSet());
 
+        log.info("Uživatel {} se úspěšně přihlásil.", user.getEmail());
+
+        // 5. Odeslání odpovědi
+        // - Hlavička SET_COOKIE obslouží nový frontend (cookies)
+        // - Tělo (body) obslouží starý frontend (LocalStorage)
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, jwtCookie.toString())
                 .body(AuthResponseDto.builder()
@@ -77,6 +89,7 @@ public class AuthController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGEMENT')")
     public ResponseEntity<UserProfileDto> register(@Valid @RequestBody UserRegistrationDto request) {
         UserProfileDto createdUser = userService.registerUser(request);
+        log.info("Nový uživatel byl úspěšně zaregistrován: {}", createdUser.getEmail());
         return ResponseEntity.status(HttpStatus.CREATED).body(createdUser);
     }
 }

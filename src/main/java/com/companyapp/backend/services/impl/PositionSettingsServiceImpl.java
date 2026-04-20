@@ -8,6 +8,7 @@ import com.companyapp.backend.repository.MainCategoryRepository;
 import com.companyapp.backend.repository.ShiftTemplateRepository;
 import com.companyapp.backend.repository.StationRepository;
 import com.companyapp.backend.repository.UserRepository;
+import com.companyapp.backend.services.AuditLogService; // PŘIDÁNO
 import com.companyapp.backend.services.PositionSettingsService;
 import com.companyapp.backend.services.dto.request.CreateCategoryRequestDto;
 import com.companyapp.backend.services.dto.request.CreateStationRequestDto;
@@ -34,6 +35,7 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     private final StationRepository stationRepository;
     private final ShiftTemplateRepository templateRepository;
     private final UserRepository userRepository;
+    private final AuditLogService auditLogService; // PŘIDÁNO PRO LOGOVÁNÍ
 
     // KONSTANTY PRO ODSTRANĚNÍ DUPLIKACÍ (java:S1192)
     private static final String CAT_NOT_FOUND = "Kategorie nenalezena";
@@ -65,7 +67,10 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     public void createCategory(CreateCategoryRequestDto request) {
         MainCategory category = new MainCategory();
         mapDtoToCategory(request, category);
-        categoryRepository.save(category);
+        MainCategory savedCategory = categoryRepository.save(category);
+
+        // PŘIDÁNO: Zápis do Audit Logu
+        auditLogService.logAction("CREATE_CATEGORY", "Station", savedCategory.getId().toString(), "Vytvořena nová kategorie: " + savedCategory.getName());
     }
 
     @Override
@@ -75,6 +80,9 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
                 .orElseThrow(() -> new ResourceNotFoundException(CAT_NOT_FOUND));
         mapDtoToCategory(request, category);
         categoryRepository.save(category);
+
+        // PŘIDÁNO: Zápis do Audit Logu
+        auditLogService.logAction("UPDATE_CATEGORY", "Station", id.toString(), "Upravena kategorie: " + category.getName());
     }
 
     @Override
@@ -83,11 +91,16 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
         MainCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(CAT_NOT_FOUND));
 
+        String categoryName = category.getName(); // Uložení jména pro log před smazáním
+
         if (category.getStations() != null) {
             // OPRAVA java:S6809: Volání přes 'self', aby byla zachována transakčnost
             new ArrayList<>(category.getStations()).forEach(s -> self.deleteStation(s.getId()));
         }
         categoryRepository.delete(category);
+
+        // PŘIDÁNO: Zápis do Audit Logu
+        auditLogService.logAction("DELETE_CATEGORY", "Station", id.toString(), "Kategorie byla smazána: " + categoryName);
     }
 
     @Override
@@ -104,6 +117,9 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
         if (category.getStations() != null) {
             category.getStations().add(savedStation);
         }
+
+        // PŘIDÁNO: Zápis do Audit Logu
+        auditLogService.logAction("CREATE_STATION", "Station", savedStation.getId().toString(), "Vytvořeno nové stanoviště: " + savedStation.getName());
     }
 
     @Override
@@ -113,6 +129,9 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
                 .orElseThrow(() -> new ResourceNotFoundException(STATION_NOT_FOUND));
         mapDtoToStation(request, station);
         stationRepository.save(station);
+
+        // PŘIDÁNO: Zápis do Audit Logu
+        auditLogService.logAction("UPDATE_STATION", "Station", id.toString(), "Upraveny parametry stanoviště: " + station.getName());
     }
 
     @Override
@@ -120,6 +139,8 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
     public void deleteStation(Integer id) {
         Station station = stationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(STATION_NOT_FOUND));
+
+        String stationName = station.getName(); // Uložení jména pro log před smazáním
 
         List<ShiftTemplate> templates = templateRepository.findByStationId(id);
         templateRepository.deleteAll(templates);
@@ -130,6 +151,9 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
         }
         userRepository.saveAll(qualifiedUsers);
         stationRepository.delete(station);
+
+        // PŘIDÁNO: Zápis do Audit Logu
+        auditLogService.logAction("DELETE_STATION", "Station", id.toString(), "Stanoviště bylo smazáno: " + stationName);
     }
 
     @Override
@@ -146,6 +170,9 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
         if (station.getTemplates() != null) {
             station.getTemplates().add(savedTemplate);
         }
+
+        // PŘIDÁNO: Zápis do Audit Logu
+        auditLogService.logAction("CREATE_TEMPLATE", "Station", savedTemplate.getId().toString(), "Vytvořena nová šablona směny: " + savedTemplate.getName());
     }
 
     @Override
@@ -155,12 +182,23 @@ public class PositionSettingsServiceImpl implements PositionSettingsService {
                 .orElseThrow(() -> new ResourceNotFoundException("Šablona nenalezena"));
         mapDtoToTemplate(request, template);
         templateRepository.save(template);
+
+        // PŘIDÁNO: Zápis do Audit Logu
+        auditLogService.logAction("UPDATE_TEMPLATE", "Station", id.toString(), "Upravena šablona směny: " + template.getName());
     }
 
     @Override
     @Transactional
     public void deleteTemplate(Integer id) {
+        // Vytáhneme si šablonu před smazáním, abychom znali její jméno pro log
+        ShiftTemplate template = templateRepository.findById(id).orElse(null);
+
         templateRepository.deleteById(id);
+
+        // PŘIDÁNO: Zápis do Audit Logu
+        if (template != null) {
+            auditLogService.logAction("DELETE_TEMPLATE", "Station", id.toString(), "Šablona směny byla smazána: " + template.getName());
+        }
     }
 
     // --- POMOCNÉ METODY PRO MAPOVÁNÍ (Odstranění boolean literálů a ternárů) ---

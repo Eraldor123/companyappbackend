@@ -33,28 +33,52 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
 
-        // 1. Získání tokenu (extrahováno do samostatné metody pro snížení kognitivní složitosti)
-        String jwt = extractJwtFromRequest(request);
+        try {
+            // 1. Získání tokenu (Hlavička nebo Cookie)
+            String jwt = extractJwtFromRequest(request);
 
-        // 2. Pokud token máme, pokusíme se uživatele přihlásit
-        if (jwt != null) {
-            try {
-                authenticateUserFromToken(jwt, request);
-            } catch (Exception e) {
-                // Pokud je token neplatný (např. vypršel nebo je upravený), potichu to zaznamenáme.
-                log.warn("Nepodařilo se ověřit JWT token (může být vypršený): {}", e.getMessage());
+            // 2. Pokud token existuje a uživatel ještě není přihlášený v kontextu
+            if (jwt != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+
+                String userEmail = jwtService.extractUsername(jwt);
+
+                if (userEmail != null) {
+                    UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
+
+                    // 3. Validace tokenu
+                    if (jwtService.isTokenValid(jwt, userDetails)) {
+                        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                                userDetails,
+                                null,
+                                userDetails.getAuthorities()
+                        );
+
+                        authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                        SecurityContextHolder.getContext().setAuthentication(authToken);
+                    }
+                }
             }
+        } catch (Exception e) {
+            // Zachytíme chyby (např. expirovaný nebo podvržený token).
+            // Aplikace nespadne, jen potichu varuje a uživatele nepustí dál.
+            log.warn("Nepodařilo se ověřit JWT token: {}", e.getMessage());
         }
 
-        // 3. Pokračujeme v řetězci filtrů
+        // 4. Pokračujeme v řetězci filtrů
         filterChain.doFilter(request, response);
     }
 
     /**
-     * Pomocná metoda pro nalezení JWT tokenu v Cookies nebo v hlavičce.
+     * Pomocná metoda: Nejdřív zkusí hlavičku (pro LocalStorage), pak Cookie (pro Cookies).
      */
     private String extractJwtFromRequest(HttpServletRequest request) {
-        // POKUS 1: Najít JWT token v bezpečné Cookie (pro Web)
+        // POKUS 1: Klasická hlavička Authorization (tvůj původní systém / Postman)
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7);
+        }
+
+        // POKUS 2: Bezpečná HttpOnly Cookie (nový systém)
         if (request.getCookies() != null) {
             for (Cookie cookie : request.getCookies()) {
                 if ("jwt".equals(cookie.getName())) {
@@ -63,34 +87,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         }
 
-        // POKUS 2: Fallback na klasickou hlavičku (pro Terminál nebo starší přístupy)
-        String authHeader = request.getHeader("Authorization");
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            return authHeader.substring(7);
-        }
-
         return null; // Token nenalezen
-    }
-
-    /**
-     * Pomocná metoda pro ověření tokenu a naplnění SecurityContextu.
-     */
-    private void authenticateUserFromToken(String jwt, HttpServletRequest request) {
-        String userEmail = jwtService.extractUsername(jwt);
-
-        if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
-
-            if (jwtService.isTokenValid(jwt, userDetails)) {
-                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        userDetails,
-                        null,
-                        userDetails.getAuthorities()
-                );
-
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authToken);
-            }
-        }
     }
 }

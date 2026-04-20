@@ -6,6 +6,7 @@ import com.companyapp.backend.entity.StandardOperatingHours;
 import com.companyapp.backend.repository.PauseRuleRepository;
 import com.companyapp.backend.repository.SeasonalRegimeRepository;
 import com.companyapp.backend.repository.StandardOperatingHoursRepository;
+import com.companyapp.backend.services.AuditLogService; // PŘIDÁNO
 import com.companyapp.backend.services.OperatingHoursService;
 import com.companyapp.backend.services.dto.request.PauseRuleDto;
 import com.companyapp.backend.services.dto.request.SeasonalRegimeDto;
@@ -30,6 +31,7 @@ public class OperatingHoursServiceImpl implements OperatingHoursService {
     private final StandardOperatingHoursRepository standardHoursRepo;
     private final SeasonalRegimeRepository seasonalRepo;
     private final PauseRuleRepository pauseRuleRepo;
+    private final AuditLogService auditLogService; // PŘIDÁNO PRO LOGOVÁNÍ
 
     // KONSTANTY PRO ODSTRANĚNÍ DUPLIKACÍ (java:S1192)
     private static final String DEFAULT_DOPO_START = "08:00";
@@ -92,6 +94,14 @@ public class OperatingHoursServiceImpl implements OperatingHoursService {
         entity.setWeekendOdpoEnd(LocalTime.parse(dto.getWeekendOdpoEnd()));
 
         standardHoursRepo.save(entity);
+
+        // PŘIDÁNO: Zápis do Audit Logu
+        auditLogService.logAction(
+                "UPDATE_STANDARD_HOURS",
+                "OperatingHours",
+                entity.getId() != null ? entity.getId().toString() : "N/A",
+                "Standardní provozní doba areálu byla aktualizována."
+        );
     }
 
     // =====================================
@@ -112,6 +122,10 @@ public class OperatingHoursServiceImpl implements OperatingHoursService {
             dto.setDopoEnd(s.getDopoEnd().toString());
             dto.setOdpoStart(s.getOdpoStart().toString());
             dto.setOdpoEnd(s.getOdpoEnd().toString());
+
+            // --- PŘIDÁNO: Mapování stavu isActive z Entity do DTO ---
+            dto.setIsActive(s.getIsActive());
+
             return dto;
         }).toList();
     }
@@ -119,9 +133,11 @@ public class OperatingHoursServiceImpl implements OperatingHoursService {
     @Override
     @Transactional
     public void saveSeason(SeasonalRegimeDto dto) {
-        SeasonalRegime entity = (dto.getId() != null)
-                ? seasonalRepo.findById(dto.getId()).orElse(new SeasonalRegime())
-                : new SeasonalRegime();
+        boolean isNew = (dto.getId() == null); // Detekce pro správný log
+
+        SeasonalRegime entity = isNew
+                ? new SeasonalRegime()
+                : seasonalRepo.findById(dto.getId()).orElse(new SeasonalRegime());
 
         entity.setName(dto.getName());
         entity.setStartDate(LocalDate.parse(dto.getStartDate()));
@@ -130,13 +146,32 @@ public class OperatingHoursServiceImpl implements OperatingHoursService {
         entity.setDopoEnd(LocalTime.parse(dto.getDopoEnd()));
         entity.setOdpoStart(LocalTime.parse(dto.getOdpoStart()));
         entity.setOdpoEnd(LocalTime.parse(dto.getOdpoEnd()));
-        seasonalRepo.save(entity);
+
+        // --- PŘIDÁNO: Mapování stavu isActive z DTO do Entity (s výchozí hodnotou true) ---
+        entity.setIsActive(dto.getIsActive() != null ? dto.getIsActive() : true);
+
+        SeasonalRegime savedEntity = seasonalRepo.save(entity);
+
+        // PŘIDÁNO: Zápis do Audit Logu podle toho, zda tvoříme nebo upravujeme
+        if (isNew) {
+            auditLogService.logAction("CREATE_SEASON", "OperatingHours", savedEntity.getId().toString(), "Vytvořen nový sezónní režim: " + savedEntity.getName());
+        } else {
+            auditLogService.logAction("UPDATE_SEASON", "OperatingHours", savedEntity.getId().toString(), "Upraven sezónní režim: " + savedEntity.getName());
+        }
     }
 
     @Override
     @Transactional
     public void deleteSeason(Integer id) {
+        // Získáme si záznam před smazáním, abychom znali název do logu
+        SeasonalRegime season = seasonalRepo.findById(id).orElse(null);
+
         seasonalRepo.deleteById(id);
+
+        // PŘIDÁNO: Zápis do Audit Logu
+        if (season != null) {
+            auditLogService.logAction("DELETE_SEASON", "OperatingHours", id.toString(), "Sezónní režim byl smazán: " + season.getName());
+        }
     }
 
     // =====================================
@@ -160,6 +195,14 @@ public class OperatingHoursServiceImpl implements OperatingHoursService {
         entity.setTriggerHours(dto.getTriggerHours());
         entity.setPauseDurationMinutes(dto.getPauseMinutes());
         pauseRuleRepo.save(entity);
+
+        // PŘIDÁNO: Zápis do Audit Logu
+        auditLogService.logAction(
+                "UPDATE_PAUSE_RULE",
+                "OperatingHours",
+                entity.getId() != null ? entity.getId().toString() : "N/A",
+                "Pravidla pro pauzy upravena (Spouštěč: " + dto.getTriggerHours() + "h, Délka: " + dto.getPauseMinutes() + " min)."
+        );
     }
 
     @Override

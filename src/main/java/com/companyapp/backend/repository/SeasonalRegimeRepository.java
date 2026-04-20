@@ -12,7 +12,7 @@ import java.util.List;
 @Repository
 public interface SeasonalRegimeRepository extends JpaRepository<SeasonalRegime, Integer> {
 
-    // Tato magická metoda nám později ve Fázi 4 najde, jestli pro zadaný den platí nějaká sezóna!
-    @Query("SELECT s FROM SeasonalRegime s WHERE :targetDate BETWEEN s.startDate AND s.endDate")
+    // --- OPRAVENO: Přidáno "AND s.isActive = true" ---
+    @Query("SELECT s FROM SeasonalRegime s WHERE :targetDate BETWEEN s.startDate AND s.endDate AND s.isActive = true")
     List<SeasonalRegime> findActiveRegimesForDate(@Param("targetDate") LocalDate targetDate);
 }

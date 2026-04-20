@@ -68,10 +68,9 @@ public class ScheduleController {
     }
 
     @GetMapping("/available-users")
-    public ResponseEntity<Page<PlannerUserDto>> getAvailableUsersForWeek(
+    public ResponseEntity<List<PlannerUserDto>> getAvailableUsersForWeek(
             @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @PageableDefault(size = 20) Pageable pageable) {
+            @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 
         List<com.companyapp.backend.entity.Availability> availabilities = availabilityRepository.findByDateRange(startDate, endDate);
         List<UUID> userIdsWithAvail = availabilities.stream()
@@ -79,7 +78,9 @@ public class ScheduleController {
                 .distinct()
                 .toList();
 
-        Page<User> activeUsersPage = userRepository.findAllActiveUsersWithDetails(pageable);
+        // OPRAVA 1: Použijeme velkou "stránku" natvrdo, abychom z databáze vytáhli VŠECHNY uživatele
+        // Tím se vyhneme tomu, že se zkontroluje jen prvních 20 lidí.
+        Page<User> activeUsersPage = userRepository.findAllActiveUsersWithDetails(org.springframework.data.domain.PageRequest.of(0, 1000));
 
         LocalDate monthStart = startDate.withDayOfMonth(1);
         LocalDate monthEnd = startDate.withDayOfMonth(startDate.lengthOfMonth());
@@ -88,10 +89,13 @@ public class ScheduleController {
 
         LocalDateTime now = LocalDateTime.now(ZoneId.of("UTC"));
 
-        Page<PlannerUserDto> resultPage = activeUsersPage.map(user ->
-                mapToPlannerUserDto(user, userIdsWithAvail, availabilities, monthAssignments, now));
+        // OPRAVA 2: Vrátíme čistý List<PlannerUserDto> a rovnou odstraníme neplatné (null) uživatele
+        List<PlannerUserDto> resultList = activeUsersPage.getContent().stream()
+                .map(user -> mapToPlannerUserDto(user, userIdsWithAvail, availabilities, monthAssignments, now))
+                .filter(u -> u != null) // Zbavíme se těch, co pro daný týden nemají dostupnost
+                .toList();
 
-        return ResponseEntity.ok(resultPage);
+        return ResponseEntity.ok(resultList);
     }
 
     // --- REFAKTORIZOVANÉ METODY PRO MINIMÁLNÍ KOGNITIVNÍ SLOŽITOST ---

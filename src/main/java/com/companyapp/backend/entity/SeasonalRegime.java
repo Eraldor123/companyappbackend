@@ -41,6 +41,9 @@ public class SeasonalRegime {
     @Column(name = "end_date", nullable = false)
     private LocalDate endDate;
 
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
+
     @Column(name = "dopo_start")
     private LocalTime dopoStart;
 

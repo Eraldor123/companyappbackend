@@ -54,4 +54,5 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
     );
 
     void deleteByShiftIdAndEmployeeId(UUID shiftId, UUID userId);
+    boolean existsByShiftIdAndEmployeeId(UUID shiftId, UUID employeeId);
 }

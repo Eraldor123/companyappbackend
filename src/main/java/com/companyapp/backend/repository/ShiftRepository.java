@@ -1,3 +1,5 @@
+// src/main/java/com/companyapp/backend/repository/ShiftRepository.java
+
 package com.companyapp.backend.repository;
 
 import com.companyapp.backend.entity.Shift;
@@ -17,19 +19,15 @@ import java.util.UUID;
 public interface ShiftRepository extends JpaRepository<Shift, UUID> {
 
     /**
-     * OPRAVA java:S1144: Metoda označena SuppressWarnings.
-     * Nezbytné pro budoucí filtrování směn podle konkrétního stanoviště v UI.
-     * EntityGraph zajišťuje optimální načtení přidružených dat v jednom dotazu.
+     * Vyhledávání směn pro konkrétní stanoviště.
+     * EntityGraph zajišťuje, že se rovnou načtou i přiřazení zaměstnanci.
      */
-    @SuppressWarnings("unused")
-    @EntityGraph(attributePaths = {"station", "template", "assignments"})
+    @EntityGraph(attributePaths = {"station", "template", "assignments", "assignments.employee"})
     List<Shift> findByShiftDateBetweenAndStationId(LocalDate startDate, LocalDate endDate, Integer stationId);
 
     /**
-     * OPRAVA java:S1144: Metoda označena SuppressWarnings.
-     * Klíčové pro validaci integrity plánu – brání kolizi dvou směn na stejném stanovišti.
+     * Pomocná metoda pro validaci – hledá směny, které se časově překrývají na stejném stanovišti.
      */
-    @SuppressWarnings("unused")
     @Query("SELECT s FROM Shift s WHERE s.startTime < :endTime AND s.endTime > :startTime AND s.station.id = :stationId")
     List<Shift> findOverlappingShifts(
             @Param("startTime") LocalDateTime startTime,
@@ -37,14 +35,19 @@ public interface ShiftRepository extends JpaRepository<Shift, UUID> {
             @Param("stationId") Integer stationId);
 
     /**
-     * FÁZE 2: Oprava N+1 pro hlavní výpis směn.
+     * KLÍČOVÁ OPRAVA (N+1 PROBLÉM):
+     * Načte všechny směny v týdnu pro hlavní mřížku Směnáře.
+     * attributePaths obsahuje "assignments.employee", což Hibernate donutí vytáhnout
+     * jména brigádníků hned v prvním dotazu pomocí JOINu.
      */
-    @EntityGraph(attributePaths = {"station", "template"})
+    @EntityGraph(attributePaths = {"station", "template", "assignments", "assignments.employee"})
     List<Shift> findByShiftDateBetween(LocalDate start, LocalDate end);
 
     /**
-     * FÁZE 1: Pesimistické zamykání (PESSIMISTIC_WRITE).
-     * SELECT ... FOR UPDATE s timeoutem 3000ms.
+     * PESIMISTICKÉ ZAMYKÁNÍ (Fáze 1 / Bod 3):
+     * Uzamkne řádek v databázi pro zápis (FOR UPDATE).
+     * Ostatní manažeři musí počkat, než se dokončí tato transakce, čímž se předejde
+     * přepsání kapacity směny při souběžném kliknutí.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints({@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000")})

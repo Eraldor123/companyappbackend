@@ -20,10 +20,6 @@ import java.util.UUID;
 @Repository
 public interface UserRepository extends JpaRepository<User, UUID> {
 
-    /**
-     * OPRAVA java:S1144: Metoda označena SuppressWarnings.
-     * Nezbytná pro backendové validace a administrativní správu uživatelů napříč stavy.
-     */
     @SuppressWarnings("unused")
     Optional<User> findByEmail(String email);
 
@@ -32,10 +28,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByPinAndIsActiveTrue(String pin);
 
-    /**
-     * OPRAVA java:S1144: Metoda označena SuppressWarnings.
-     * Realizuje bezpečné "smazání" (deaktivaci) uživatele bez ztráty historických dat.
-     */
     @SuppressWarnings("unused")
     @Modifying
     @Query("UPDATE User u SET u.isActive = false WHERE u.id = :userId")
@@ -48,8 +40,19 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Page<User> findAllActiveUsersWithDetails(Pageable pageable);
 
     /**
-     * Najde všechny lidi, kteří mají danou kvalifikaci.
-     * OPRAVA: Odstraněna plná cesta k balíčku Station pro lepší čitelnost.
+     * OPRAVA BYTEA CHYBY: Podmínka zkontrolována na prázdný string ('') místo IS NULL.
      */
+    @EntityGraph(attributePaths = {"userProfile", "qualifiedStations"})
+    @Query("SELECT u FROM User u " +
+            "LEFT JOIN u.userProfile up " +
+            "WHERE u.isActive = true " +
+            "AND (:search = '' OR LOWER(up.firstName) LIKE CONCAT('%', :search, '%') OR LOWER(up.lastName) LIKE CONCAT('%', :search, '%')) " +
+            "AND (:contractType = '' OR EXISTS (SELECT 1 FROM Contract c WHERE c.user.id = u.id AND CAST(c.type AS string) = :contractType))")
+    Page<User> findFilteredActiveUsersWithDetails(
+            @Param("search") String search,
+            @Param("contractType") String contractType,
+            Pageable pageable
+    );
+
     List<User> findAllByQualifiedStationsContains(Station station);
 }
