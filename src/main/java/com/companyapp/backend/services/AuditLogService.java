@@ -6,11 +6,13 @@ import org.springframework.data.domain.Pageable;
 
 public interface AuditLogService {
 
-    // Původní metoda bez filtrů
     Page<AuditLogDto> getAllLogs(Pageable pageable);
 
-    // NOVÉ: Přidaná metoda s filtry, kterou teď volá Controller
     Page<AuditLogDto> getAllLogsFiltered(Pageable pageable, String search, String module);
 
+    // Původní metoda (pro automatické zjištění uživatele)
     void logAction(String action, String entityName, String entityId, String details);
+
+    // NOVÁ PŘETÍŽENÁ METODA: Umožňuje ručně zadat, kdo akci provedl (např. email při loginu)
+    void logAction(String action, String entityName, String entityId, String details, String performedBy);
 }

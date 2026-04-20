@@ -28,60 +28,50 @@ public class AuditLogServiceImpl implements AuditLogService {
     @Override
     @Transactional(readOnly = true)
     public Page<AuditLogDto> getAllLogs(Pageable pageable) {
-        // Pro zpětnou kompatibilitu volá původní metodu bez filtrů
-        Page<AuditLog> logs = auditLogRepository.findAll(pageable);
-        return logs.map(this::mapToDto);
+        return auditLogRepository.findAll(pageable).map(this::mapToDto);
     }
 
-    /**
-     * NOVÉ: Metoda pro filtrovaný a stránkovaný výpis logů.
-     */
+    @Override
     @Transactional(readOnly = true)
     public Page<AuditLogDto> getAllLogsFiltered(Pageable pageable, String search, String module) {
-        Page<AuditLog> logs;
-
-        boolean hasSearch = search != null && !search.trim().isEmpty();
-        boolean hasModule = module != null && !module.trim().isEmpty();
-
-        if (hasSearch || hasModule) {
-            // Ošetření chyby bytea: posíláme prázdný string "" místo null
-            String searchParam = hasSearch ? search.toLowerCase() : "";
-            String moduleParam = hasModule ? module : "";
-
-            logs = auditLogRepository.findFilteredLogs(searchParam, moduleParam, pageable);
-        } else {
-            logs = auditLogRepository.findAll(pageable);
-        }
-
-        return logs.map(this::mapToDto);
+        String searchParam = (search != null) ? search.toLowerCase() : "";
+        String moduleParam = (module != null) ? module : "";
+        return auditLogRepository.findFilteredLogs(searchParam, moduleParam, pageable).map(this::mapToDto);
     }
 
+    // Automatická verze - využívá novou metodu s hodnotou null pro performer
     @Async("auditTaskExecutor")
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logAction(String action, String entityName, String entityId, String details) {
-        String currentUser = "System";
-        try {
-            // VYLEPŠENÍ: Robustnější zjištění uživatele (počítá i s CustomUserDetails)
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        this.logAction(action, entityName, entityId, details, null);
+    }
 
-            if (auth != null && auth.isAuthenticated() && !auth.getPrincipal().equals("anonymousUser")) {
-                Object principal = auth.getPrincipal();
-                if (principal instanceof UserDetails) {
-                    currentUser = ((UserDetails) principal).getUsername(); // Vytáhne bezpečně e-mail
-                } else {
-                    currentUser = auth.getName();
+    // NOVÁ VERZE: Pokud je performedBy zadán, použije se. Jinak zkusí SecurityContext.
+    @Async("auditTaskExecutor")
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logAction(String action, String entityName, String entityId, String details, String performedBy) {
+        String user = performedBy;
+
+        if (user == null) {
+            user = "System";
+            try {
+                Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+                if (auth != null && auth.isAuthenticated() && !auth.getPrincipal().equals("anonymousUser")) {
+                    Object principal = auth.getPrincipal();
+                    user = (principal instanceof UserDetails) ? ((UserDetails) principal).getUsername() : auth.getName();
                 }
+            } catch (Exception e) {
+                log.debug("Audit: Nepodařilo se získat uživatele z kontextu.");
             }
-        } catch (Exception e) {
-            log.debug("Nepodařilo se získat uživatele ze SecurityContextu: {}", e.getMessage());
         }
 
         AuditLog auditLog = AuditLog.builder()
                 .action(action)
                 .entityName(entityName)
                 .entityId(entityId)
-                .performedBy(currentUser)
+                .performedBy(user)
                 .timestamp(LocalDateTime.now())
                 .details(details)
                 .build();
