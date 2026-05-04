@@ -58,6 +58,10 @@ public class DataSeederService {
             }
         }
 
+        log.warn("Generuju Admina!");
+        generateSingleAdmin(encodedPassword, today);
+
+
         return "Úspěšně naverbováno " + count + " brigádníků vč. profilů, smluv, kvalifikací a dostupností!";
     }
 
@@ -84,6 +88,25 @@ public class DataSeederService {
         createProfile(savedUser, fname, lname, faker.phoneNumber().cellPhone());
         createContract(savedUser, today);
         createAvailabilities(savedUser.getId(), faker, today);
+    }
+
+    private void generateSingleAdmin(String password, LocalDate today) {
+        if (!userRepository.existsByEmail("1@1.cz")) {
+            log.error("Generuju Admin Usera");
+            String fname = "1";
+            String lname = "1";
+            String email = "1@1.cz";
+
+            // 1. Uživatel (Entity)
+            User user = new User();
+            user.setEmail(email);
+            user.setPassword(password);
+            user.setPin("1234");
+            user.setRoles(Set.of(AccessLevel.ADMIN));
+            user.setIsActive(true);
+
+            User savedUser = userRepository.save(user);
+        }
     }
 
     private Set<Station> pickRandomStations(Faker faker, List<Station> allStations) {
